@@ -1,6 +1,9 @@
 # Claude Code 快速开始：命令与路径速记
 
 > 用途：复习“15 分钟快速开始”涉及的目录、复制命令、slash command、项目 memory 和 skill。
+>
+> 本指南默认使用 **Windows PowerShell 简写**：用 `mkdir` 创建目录，用 `cp` 复制文件。
+> `cp` 在 PowerShell 中是 `Copy-Item` 的别名，不需要改写成长命令。
 
 ## 1. 先分清两个目录
 
@@ -31,21 +34,21 @@ Test-Path "D:\某个文件或目录"      # 检查路径是否存在
 
 ## 3. 创建 `.claude\commands` 目录
 
-教程中的 Unix 写法：
+PowerShell 推荐写法：
 
-```bash
-mkdir -p /path/to/your-project/.claude/commands
+```powershell
+mkdir D:\Projects\my-app\.claude\commands -Force
 ```
 
 - `mkdir`：创建目录。
-- `-p`：自动创建缺少的父目录；目录已存在时也不报错。
-- `/path/to/your-project`：占位符，要换成实际项目地址。
+- `D:\Projects\my-app`：示例项目地址，要换成自己的实际项目地址。
+- `-Force`：目录已经存在时继续执行，不把它当成错误。
 - 正确目录名是 `.claude\commands`，不是 `.cloud\comments`。
 
-Windows PowerShell 写法：
+如果终端已经位于实际项目根目录，也可以使用相对路径：
 
 ```powershell
-New-Item -ItemType Directory -Force "D:\Projects\my-app\.claude\commands"
+mkdir .\.claude\commands -Force
 ```
 
 结果：
@@ -68,19 +71,22 @@ cp  源地址  目标地址
 - 源地址表示“复制谁”。
 - 目标地址表示“复制到哪里”。
 
-教程中的写法：
-
-```bash
-cp 01-slash-commands/optimize.md /path/to/your-project/.claude/commands/
-```
-
-这条相对路径命令要求终端当前位于教程仓库根目录。
-
-PowerShell 完整路径写法：
+假设终端当前位于教程仓库根目录：
 
 ```powershell
-Copy-Item -LiteralPath "D:\cc\claude-howto-zh-cn\01-slash-commands\optimize.md" -Destination "D:\Projects\my-app\.claude\commands\optimize.md"
+cp .\01-slash-commands\optimize.md D:\Projects\my-app\.claude\commands\
 ```
+
+也可以把源地址和目标地址都写成 Windows 完整路径：
+
+```powershell
+cp D:\cc\claude-howto-zh-cn\01-slash-commands\optimize.md D:\Projects\my-app\.claude\commands\
+```
+
+- 上面两种都是 PowerShell 写法。
+- `cp` 是 `Copy-Item` 的简写，作用相同。
+- 如果路径中有空格，就给完整路径加双引号。
+- 目标位置以 `\` 结尾时，文件会保持原名 `optimize.md`。
 
 复制结果：
 
@@ -115,16 +121,10 @@ claude
 
 ## 6. 添加项目级 memory
 
-教程命令：
-
-```bash
-cp 02-memory/project-CLAUDE.md /path/to/your-project/CLAUDE.md
-```
-
-PowerShell 写法：
+假设终端当前位于教程仓库根目录，PowerShell 写法是：
 
 ```powershell
-Copy-Item -LiteralPath "D:\cc\claude-howto-zh-cn\02-memory\project-CLAUDE.md" -Destination "D:\Projects\my-app\CLAUDE.md"
+cp .\02-memory\project-CLAUDE.md D:\Projects\my-app\CLAUDE.md
 ```
 
 含义：把教程里的 `project-CLAUDE.md` 模板复制到项目根目录，并改名为 `CLAUDE.md`。
@@ -157,23 +157,16 @@ $env:USERPROFILE
 
 ## 8. 安装全局 skill
 
-教程命令：
-
-```bash
-mkdir -p ~/.claude/skills
-cp -r 03-skills/code-review-specialist ~/.claude/skills/
-```
-
-- `-r` 是 recursive，表示递归复制整个文件夹及其全部内容。
-- skill 安装到个人目录后，可供多个项目使用。
-
-PowerShell 写法：
+PowerShell 推荐写法：
 
 ```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\skills"
-
-Copy-Item -Recurse -LiteralPath "D:\cc\claude-howto-zh-cn\03-skills\code-review-specialist" -Destination "$env:USERPROFILE\.claude\skills\code-review-specialist"
+mkdir "$env:USERPROFILE\.claude\skills" -Force
+cp -Recurse .\03-skills\code-review-specialist "$env:USERPROFILE\.claude\skills\"
 ```
+
+- `-Recurse` 表示递归复制整个文件夹及其全部内容。
+- 这条 `cp` 命令要求终端当前位于教程仓库根目录。
+- skill 安装到个人目录后，可供多个项目使用。
 
 ## 9. 三种能力放在哪里
 
@@ -187,8 +180,8 @@ Copy-Item -Recurse -LiteralPath "D:\cc\claude-howto-zh-cn\03-skills\code-review-
 
 ```text
 mkdir = 创建目录
-cp / Copy-Item = 复制文件
-cp -r / Copy-Item -Recurse = 复制整个文件夹
+cp = 在 PowerShell 中复制文件
+cp -Recurse = 在 PowerShell 中复制整个文件夹
 相对路径 = 从当前目录开始找
 绝对路径 = 从盘符开始写完整地址
 .claude\commands\optimize.md = Claude Code 中的 /optimize
