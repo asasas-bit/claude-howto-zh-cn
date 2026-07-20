@@ -1,4 +1,5 @@
 ---
+name: git-safe-submit
 allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*), Bash(git diff:*)
 argument-hint: [message]
 description: 基于当前改动生成并执行一次 git commit
