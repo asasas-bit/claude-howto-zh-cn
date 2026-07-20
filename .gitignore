@@ -43,12 +43,10 @@ yarn-error.log*
 # Temporary files
 *.tmp
 *.temp
-# Keep .claude/ clean for hand-on section — except project skills
+# Keep .claude/ clean for hand-on section — 只放行 commands 和 skills，其他都挡住
 .claude/*
+!.claude/commands/
 !.claude/skills/
-.claude/skills/*
-!.claude/skills/self-assessment/
-!.claude/skills/lesson-quiz/
 blog-posts/
 
 # 本地学习进度：HTML 页面随仓库分发，导出的 JSON 数据保留在本机
