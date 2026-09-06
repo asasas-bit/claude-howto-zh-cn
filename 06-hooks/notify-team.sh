@@ -2,7 +2,8 @@
 # Send notifications on events
 # Hook: PostPush
 
-REPO_NAME=$(basename $(git rev-parse --show-toplevel 2>/dev/null) 2>/dev/null)
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+REPO_NAME=$(basename "$REPO_ROOT")
 COMMIT_MSG=$(git log -1 --pretty=%B 2>/dev/null)
 AUTHOR=$(git log -1 --pretty=%an 2>/dev/null)
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)

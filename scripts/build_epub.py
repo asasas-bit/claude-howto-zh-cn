@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# dependencies = ["ebooklib", "markdown", "beautifulsoup4", "httpx", "pillow", "tenacity"]
+# dependencies = ["ebooklib", "markdown", "beautifulsoup4", "pillow"]
 # ///
 """
 Build an EPUB from the Claude How-To markdown files.
@@ -17,8 +17,9 @@ Usage:
         --root, -r      Root directory containing markdown files (default: repo root)
         --output, -o    Output EPUB file path (default: <root>/claude-howto-guide.epub)
         --verbose, -v   Enable verbose logging
-        --timeout       Timeout for API requests in seconds (default: 30)
-        --max-concurrent Maximum concurrent API requests (default: 10)
+        --mmdc-path     Path to mmdc binary (default: mmdc from PATH)
+        --lang          EPUB language metadata (default: zh)
+        --puppeteer-config Path to Puppeteer config passed to mmdc
 
     The script uses inline script dependencies (PEP 723), so uv will
     automatically install required packages in an isolated environment.
@@ -28,45 +29,38 @@ Output:
 
 Features:
     - Organizes chapters by folder structure (01-slash-commands, etc.)
-    - Renders Mermaid diagrams as PNG images via Kroki.io API (async concurrent)
+    - Renders Mermaid diagrams as PNG images via local mmdc CLI (no network required)
     - Generates a cover image from the project logo
     - Converts internal markdown links to EPUB chapter references
     - Handles SVG images by replacing with styled placeholders
-    - Falls back to readable Mermaid source blocks if remote rendering fails
+    - Strict error mode: fails if any diagram cannot be rendered
 
 Requirements:
     - uv (recommended) or Python 3.10+ with dependencies installed
-    - Internet connection for Mermaid diagram rendering (optional fallback included)
+    - @mermaid-js/mermaid-cli installed: npm install -g @mermaid-js/mermaid-cli
     - Repository structure with markdown files and claude-howto-logo.png
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
-import base64
 import html
 import logging
 import os
 import re
+import shutil
+import subprocess  # nosec B404
 import sys
-import zlib
+import tempfile
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import httpx
 import markdown
 from bs4 import BeautifulSoup
 from ebooklib import epub
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 if TYPE_CHECKING:
     from bs4.element import Tag
@@ -128,11 +122,9 @@ class EPUBConfig:
     cover_title_color: tuple[int, int, int] = (78, 205, 196)
     cover_subtitle_color: tuple[int, int, int] = (168, 178, 209)
 
-    # Network Settings
-    kroki_base_url: str = "https://kroki.io"
-    request_timeout: float = 30.0
-    max_retries: int = 3
-    max_concurrent_requests: int = 10
+    # Local Mermaid rendering
+    mmdc_path: str = "mmdc"
+    puppeteer_config: str | None = None
 
     # Font paths (platform-specific)
     title_font_paths: list[str] = field(
@@ -244,7 +236,7 @@ def validate_inputs(config: EPUBConfig, logger: logging.Logger) -> None:
 
 
 # =============================================================================
-# Mermaid Rendering (Async with Retry)
+# Mermaid Rendering (Local mmdc)
 # =============================================================================
 
 
@@ -261,7 +253,7 @@ def sanitize_mermaid(mermaid_code: str) -> str:
 
 
 class MermaidRenderer:
-    """Async renderer for Mermaid diagrams via Kroki.io API."""
+    """Render Mermaid diagrams locally via the mmdc CLI."""
 
     def __init__(
         self, config: EPUBConfig, state: BuildState, logger: logging.Logger
@@ -269,112 +261,93 @@ class MermaidRenderer:
         self.config = config
         self.state = state
         self.logger = logger
-        self._semaphore: asyncio.Semaphore | None = None
 
-    async def _fetch_single(
-        self, client: httpx.AsyncClient, mermaid_code: str, index: int
-    ) -> tuple[str, tuple[bytes, str]] | None:
-        """Fetch a single Mermaid diagram with retry logic."""
+    def _resolve_mmdc(self) -> str:
+        """Resolve the configured mmdc binary or fail with an actionable error."""
+        mmdc = shutil.which(self.config.mmdc_path)
+        if mmdc is None:
+            raise MermaidRenderError(
+                f"mmdc not found at '{self.config.mmdc_path}'. "
+                "Install it with: npm install -g @mermaid-js/mermaid-cli"
+            )
+        return mmdc
+
+    def _render_one(
+        self, mmdc: str, mermaid_code: str, index: int
+    ) -> tuple[bytes, str]:
+        """Render one unique Mermaid diagram and cache the PNG bytes."""
         cache_key = mermaid_code.strip()
-
-        # Check cache first
         if cache_key in self.state.mermaid_cache:
             self.logger.debug(f"Cache hit for diagram {index}")
-            return cache_key, self.state.mermaid_cache[cache_key]
+            return self.state.mermaid_cache[cache_key]
 
-        # Rate limit with semaphore
-        assert self._semaphore is not None
-        async with self._semaphore:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_file = Path(tmpdir) / "diagram.mmd"
+            output_file = Path(tmpdir) / "diagram.png"
+            input_file.write_text(mermaid_code, encoding="utf-8")
+
+            command = [
+                mmdc,
+                "-i",
+                str(input_file),
+                "-o",
+                str(output_file),
+                "-b",
+                "white",
+            ]
+            if self.config.puppeteer_config:
+                command.extend(["-p", self.config.puppeteer_config])
+
             try:
-                result = await self._fetch_with_retry(client, mermaid_code, index)
-            except (httpx.HTTPError, MermaidRenderError) as e:
-                self.logger.warning(
-                    f"Skipping rendered image for Mermaid diagram {index}: "
-                    f"{type(e).__name__}: {e}. Keeping source block in EPUB."
+                result = subprocess.run(  # nosec B603
+                    command,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=60,
                 )
-                return None
-            if result is None:
-                self.logger.warning(
-                    f"Skipping rendered image for Mermaid diagram {index} after "
-                    f"{self.config.max_retries} attempts. Keeping source block in EPUB."
-                )
-                return None
-            return cache_key, result
-
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((httpx.TimeoutException, httpx.NetworkError)),
-        reraise=True,
-    )
-    async def _fetch_with_retry(
-        self, client: httpx.AsyncClient, mermaid_code: str, index: int
-    ) -> tuple[bytes, str] | None:
-        """Fetch diagram with retry logic."""
-        try:
-            compressed = zlib.compress(mermaid_code.encode("utf-8"), level=9)
-            encoded = base64.urlsafe_b64encode(compressed).decode("ascii")
-            url = f"{self.config.kroki_base_url}/mermaid/png/{encoded}"
-
-            self.logger.debug(f"Fetching diagram {index}...")
-            response = await client.get(url, timeout=self.config.request_timeout)
-
-            if response.status_code == 200:
-                self.state.mermaid_counter += 1
-                img_name = f"mermaid_{self.state.mermaid_counter}.png"
-                result = (response.content, img_name)
-                cache_key = mermaid_code.strip()
-                self.state.mermaid_cache[cache_key] = result
-                self.logger.info(f"Rendered diagram {index} -> {img_name}")
-                return result
-            else:
-                self.logger.warning(
-                    f"Kroki API returned {response.status_code} for diagram {index}"
-                )
+            except subprocess.TimeoutExpired as exc:
                 raise MermaidRenderError(
-                    f"Kroki API returned {response.status_code} for diagram {index}"
+                    f"mmdc timed out rendering diagram {index} (60s limit)"
+                ) from exc
+
+            if result.returncode != 0:
+                details = result.stderr.strip() or result.stdout.strip()
+                raise MermaidRenderError(
+                    f"mmdc failed for diagram {index}: {details or 'unknown error'}"
+                )
+            if not output_file.is_file():
+                raise MermaidRenderError(f"mmdc produced no output for diagram {index}")
+
+            png_bytes = output_file.read_bytes()
+            if not png_bytes:
+                raise MermaidRenderError(
+                    f"mmdc produced empty output for diagram {index}"
                 )
 
-        except httpx.TimeoutException:
-            self.logger.warning(f"Timeout fetching diagram {index}, will retry...")
-            raise
-        except httpx.NetworkError as e:
-            self.logger.warning(
-                f"Network error for diagram {index}: {e}, will retry..."
-            )
-            raise
+        self.state.mermaid_counter += 1
+        img_name = f"mermaid_{self.state.mermaid_counter}.png"
+        rendered = (png_bytes, img_name)
+        self.state.mermaid_cache[cache_key] = rendered
+        self.logger.info(f"Rendered diagram {index} -> {img_name}")
+        return rendered
 
-    async def render_all(
+    def render_all(
         self, diagrams: list[tuple[int, str]]
     ) -> dict[str, tuple[bytes, str]]:
-        """Render all Mermaid diagrams concurrently."""
-        self._semaphore = asyncio.Semaphore(self.config.max_concurrent_requests)
+        """Render all unique Mermaid diagrams sequentially with local mmdc."""
+        mmdc = self._resolve_mmdc()
         results: dict[str, tuple[bytes, str]] = {}
 
-        async with httpx.AsyncClient(
-            follow_redirects=True,
-            limits=httpx.Limits(max_connections=self.config.max_concurrent_requests),
-            timeout=httpx.Timeout(self.config.request_timeout),
-        ) as client:
-            tasks = [
-                self._fetch_single(client, sanitize_mermaid(code), idx)
-                for idx, code in diagrams
-            ]
+        self.logger.info(f"Rendering {len(diagrams)} Mermaid diagrams locally...")
+        for index, code in diagrams:
+            sanitized = sanitize_mermaid(code)
+            cache_key = sanitized.strip()
+            results[cache_key] = self._render_one(mmdc, sanitized, index)
 
-            self.logger.info(f"Fetching {len(tasks)} Mermaid diagrams concurrently...")
-
-            # Remote rendering is best-effort; unavailable diagrams remain as code blocks.
-            completed = await asyncio.gather(*tasks)
-
-            for item in completed:
-                if item is None:
-                    continue
-                cache_key, data = item
-                results[cache_key] = data
-
-        success_count = len(results)
         self.logger.info(
-            f"Successfully rendered {success_count}/{len(diagrams)} diagrams"
+            f"Successfully rendered {len(results)} unique diagrams "
+            f"({len(diagrams)} total blocks)"
         )
         return results
 
@@ -1077,12 +1050,12 @@ def create_stylesheet() -> epub.EpubItem:
     )
 
 
-async def build_epub_async(
+def build_epub_async(
     config: EPUBConfig,
     logger: logging.Logger,
     state: BuildState | None = None,
 ) -> Path:
-    """Build EPUB asynchronously with concurrent diagram fetching."""
+    """Build the EPUB; the historical function name is kept for compatibility."""
     state = state or BuildState()
     state.reset()  # Ensure clean state
 
@@ -1110,14 +1083,14 @@ async def build_epub_async(
     collector = ChapterCollector(config.root_path, state)
     chapter_infos = collector.collect_all_chapters(get_chapter_order())
 
-    # Extract and pre-fetch all Mermaid diagrams
+    # Extract and render all Mermaid diagrams locally
     logger.info("Extracting Mermaid diagrams...")
     md_files = [(ch.file_path, ch.file_title) for ch in chapter_infos]
     all_diagrams = extract_all_mermaid_blocks(md_files, logger)
 
     if all_diagrams:
         renderer = MermaidRenderer(config, state, logger)
-        await renderer.render_all(all_diagrams)
+        renderer.render_all(all_diagrams)
 
     # Process chapters
     logger.info("Processing chapters...")
@@ -1209,7 +1182,7 @@ def create_epub(root_path: Path, output_path: Path, verbose: bool = False) -> Pa
     """Synchronous wrapper for backward compatibility."""
     logger = setup_logging(verbose)
     config = EPUBConfig(root_path=root_path, output_path=output_path)
-    return asyncio.run(build_epub_async(config, logger))
+    return build_epub_async(config, logger)
 
 
 # =============================================================================
@@ -1240,16 +1213,23 @@ def main() -> int:
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
     parser.add_argument(
-        "--timeout",
-        type=float,
-        default=30.0,
-        help="Timeout for API requests in seconds (default: 30)",
+        "--mmdc-path",
+        type=str,
+        default="mmdc",
+        help="Path to mmdc binary (default: mmdc from PATH)",
     )
     parser.add_argument(
-        "--max-concurrent",
-        type=int,
-        default=10,
-        help="Maximum concurrent API requests (default: 10)",
+        "--lang",
+        type=str,
+        default="zh",
+        choices=["zh"],
+        help="EPUB language metadata (this fork maintains zh only; default: zh)",
+    )
+    parser.add_argument(
+        "--puppeteer-config",
+        type=str,
+        default=None,
+        help="Path to Puppeteer config JSON passed to mmdc via -p",
     )
 
     args = parser.parse_args()
@@ -1268,12 +1248,13 @@ def main() -> int:
     config = EPUBConfig(
         root_path=root,
         output_path=output,
-        request_timeout=args.timeout,
-        max_concurrent_requests=args.max_concurrent,
+        language=args.lang,
+        mmdc_path=args.mmdc_path,
+        puppeteer_config=args.puppeteer_config,
     )
 
     try:
-        result = asyncio.run(build_epub_async(config, logger))
+        result = build_epub_async(config, logger)
         print(f"Successfully created: {result}")
         return 0
     except EPUBBuildError as e:

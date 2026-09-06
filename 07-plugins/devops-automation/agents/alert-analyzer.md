@@ -1,7 +1,7 @@
 ---
 name: alert-analyzer
 description: 分析监控告警和系统指标
-tools: read, grep, bash
+tools: Read, Grep, Bash
 ---
 
 # Alert Analyzer / 告警分析代理

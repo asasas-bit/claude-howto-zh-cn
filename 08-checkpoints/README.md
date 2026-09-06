@@ -5,7 +5,7 @@
 
 # Checkpoints 与 Rewind 指南
 
-checkpoints 是 Claude Code 新手最值得尽早掌握的安全机制之一。  
+checkpoints 是 Claude Code 新手最值得尽早掌握的安全机制之一。
 它的意义很简单：**敢试，因为随时能回退。**
 
 ---
@@ -63,7 +63,7 @@ checkpoints 是 Claude Code 新手最值得尽早掌握的安全机制之一。
 5. **Summarize up to here**：压缩所选位置之前的对话，保留这一点之后的消息；它和上一项组成双向、定点的上下文压缩
 6. **Never mind**：取消
 
-> 新版行为里还有一个很实用的小细节：  
+> 新版行为里还有一个很实用的小细节：
 > 你在做 **Restore conversation** 或 **Summarize from here** 后，被选中位置的原始 prompt 会回到输入框里，方便你重新发送或改写。
 
 > 从 `v2.1.191+` 起，`/clear` 不再是 `/rewind` 的硬边界。也就是说，即使你已经清空过当前对话，仍可以用 `/rewind` 回到 `/clear` 之前创建的 checkpoint，找回更早的代码或上下文。
@@ -84,16 +84,19 @@ Claude Code 会自动创建 checkpoints，所以你不需要手动先“存档�
 
 - checkpoints 默认开启
 - 不需要再单独配置 `autoCheckpoint: true`
+- `fileCheckpointingEnabled`（`v2.1.119+`）控制是否在编辑前保存文件快照
+- `/config` 中对应 **Rewind code (checkpoints)**
 
-真正和 checkpoints 保留周期相关的，是：
+完整配置示例：
 
 ```json
 {
+  "fileCheckpointingEnabled": true,
   "cleanupPeriodDays": 30
 }
 ```
 
-也就是说，你更该关注的是“保留多久”，而不是“要不要开启”。
+`fileCheckpointingEnabled` 默认是 `true`；也可用 `CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING` 禁用文件 checkpoint。`cleanupPeriodDays` 默认是 `30`，控制保留天数。Claude Code 只保存最近 **100 个 checkpoints** 的文件快照；即使仍在保留期内，更老的快照也会被丢弃。
 
 ### `cleanupPeriodDays` 现在影响的范围更大了
 
@@ -146,6 +149,10 @@ Claude Code 会自动创建 checkpoints，所以你不需要手动先“存档�
 
 不是。像 **Summarize from here** 这种选项，核心作用是压缩会话上下文，不会直接改你磁盘上的代码文件。
 
+### 5. 忽略 symlink / hard link 的保护边界
+
+从 `v2.1.216+` 起，`/rewind` 不会再沿着被跟踪路径上的 symlink 或 hard link 去恢复、覆盖或删除真实目标。遇到这类路径时会跳过，并报告跳过数量。这个保护能避免回退误伤链接指向的外部文件，但也意味着这些路径需要你手工核对。
+
 ---
 
 ## 常见使用场景
@@ -161,7 +168,7 @@ Claude Code 会自动创建 checkpoints，所以你不需要手动先“存档�
 
 ## 中国用户特别注意
 
-如果你在本地化或改写示例文档时做大范围文本替换，checkpoints 也非常有用。  
+如果你在本地化或改写示例文档时做大范围文本替换，checkpoints 也非常有用。
 因为这类修改很容易“看起来都对，实际把命令名或字段名翻坏”，有 checkpoint 会安全很多。
 
 ## checkpoints 和 Git 怎么配合

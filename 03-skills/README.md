@@ -60,19 +60,23 @@ skill-name/
 
 ---
 
-## 2026 年 5 月这批 skills 更新，最值得知道什么
+## 当前 skills 更新，最值得知道什么
 
 - skill description 的预算更紧了：默认只占上下文窗口的 **1%**，fallback 约 **8,000 字符**
 - 即使装了很多 skills，**skill 名称会保留**，description 则会被裁短
 - 如果你希望某个 skill 只在某些路径下自动触发，可以在 frontmatter 里加 `paths`
 - 写 description 时要把“最关键的使用场景”放前面，否则容易在预算裁剪时丢失重点
-- `effort` 可用值需要看模型能力；新版里可写 `low` / `medium` / `high` / `xhigh` / `max`，Opus 4.8 默认是 `high`，`xhigh` 适用于 Opus 4.8 / 4.7
+- `effort` 可用值需要看模型能力；Opus 5、Sonnet 5、Opus 4.8、Opus 4.7 支持 `low` / `medium` / `high` / `xhigh` / `max`，除 Opus 4.7 默认 `xhigh` 外，其余默认 `high`
 - skill 内容里可以使用 `${CLAUDE_EFFORT}` 获取当前 effort level，适合根据思考强度分支执行不同流程
 - `/skills` 交互菜单支持直接输入过滤，装了很多 skills 时更容易定位
-- Claude Code 现在内置 **10 个 bundled skills**，其中 `/run`、`/verify`、`/run-skill-generator` 很适合做“代码真的跑起来了吗”的端到端验证
+- Claude Code 现在内置一组 bundled skills，其中 `/run`、`/verify`、`/run-skill-generator` 很适合做“代码真的跑起来了吗”的端到端验证
 - `/reload-skills` 可以在不重启 session 的情况下重新扫描 skill 目录；`SessionStart` hook 也可以通过返回 `reloadSkills: true` 触发同样行为
 - skill frontmatter 现在可以写 `disallowed-tools`，用于在 skill 生效期间移除某些工具权限
 - `/simplify` 在 `v2.1.154+` 后重新成为独立的清理型命令；`/code-review` 继续负责正确性缺陷审查
+- `/code-review` 和 `/verify` 从 `v2.1.215+` 起只会在用户显式调用时运行；`/deep-research` 从 `v2.1.218+` 起也只允许显式调用
+- `/code-review` 从 `v2.1.218+` 起在后台 subagent 中运行，不占满主对话，叠加 slash-skills 时仍以组合后的请求为审查目标
+- `context: fork` skills 从 `v2.1.218+` 起默认 `background: true`；需要前台运行时写 `background: false`
+- frontmatter boolean 从 `v2.1.218+` 起除 `true` / `false` 外，也接受不区分大小写的 `yes` / `no`、`on` / `off`、`1` / `0`
 - 如果你写了 `context: fork` 的 skill，建议升级到 `v2.1.145+`；上游修复了少数场景下可能无限重新调用的问题
 
 ---
@@ -111,7 +115,7 @@ skills 的一个核心优点是按需加载，而不是一上来把所有内容�
 | 项目级 | `.claude/skills/<skill-name>/SKILL.md` | 团队共享 |
 | plugin 自带 | `<plugin>/skills/...` | 和 plugin 一起分发 |
 
-同名 skill 的优先级按 Enterprise > Personal > Project 理解；plugin 提供的 skill 带 namespace，避免和普通 skill 名称冲突。`skillOverrides` 不改变来源优先级，它只控制某个 skill 的可见性，见后文。
+同名 skill 的优先级按 **Enterprise > Project > Personal** 理解；项目 skill 默认覆盖个人同名 skill。plugin 提供的 skill 带 namespace，避免和普通 skill 名称冲突。`skillOverrides` 用来调整 skill 的可见性和调用行为，见后文。
 
 ---
 
@@ -137,13 +141,14 @@ skills 的一个核心优点是按需加载，而不是一上来把所有内容�
 | `/claude-api` | 项目里用到 Anthropic / Claude API 或 SDK，需要加载参考资料时 |
 | `/dataviz` | 需要设计图表、dashboard 或校验调色板时（`v2.1.198+`） |
 | `/debug` | 当前 session 出错，需要读取 debug log 定位原因时 |
+| `/deep-research <topic>` | 需要深入研究指定主题时；`v2.1.218+` 起必须显式调用 |
 | `/fewer-permission-prompts` | 想减少反复弹出的只读权限确认时 |
 | `/loop` | 需要按固定间隔重复执行一个 prompt 时 |
 | `/run` | 改完后要启动项目，确认应用真实跑起来时 |
 | `/run-skill-generator` | 第一次让 Claude 学会这个项目该怎么 `/run` / `/verify` 时 |
-| `/code-review [effort]` | 想让 Claude 审查当前 diff 的正确性缺陷时 |
+| `/code-review [effort]` | 想让 Claude 审查当前 diff 的正确性缺陷时；`v2.1.215+` 起必须显式调用，`v2.1.218+` 起在后台 subagent 中运行 |
 | `/simplify` | 想做复用、简化、效率和抽象层级相关的清理型审查，并让 Claude 应用修复时 |
-| `/verify` | 不只跑测试，还要构建、运行并观察修复是否真的生效时 |
+| `/verify` | 不只跑测试，还要构建、运行并观察修复是否真的生效时；`v2.1.215+` 起必须显式调用 |
 
 对中文用户来说，`/verify` 的价值很高：它把“测试通过”和“用户实际能用”分开看，能减少本地看似成功、线上或真实应用仍出错的问题。
 
@@ -194,6 +199,9 @@ cp -r 03-skills/code-review-specialist .claude/skills/
 - `paths`
 - `allowed-tools`
 - `disallowed-tools`
+- `context`
+- `agent`
+- `background`
 - `reloadSkills`
 - `${CLAUDE_EFFORT}`
 - `${CLAUDE_PROJECT_DIR}`
@@ -216,9 +224,12 @@ paths: "src/api/**/*.ts"
 
 - `disable-model-invocation: true`：禁止模型自动调用，但仍允许用户从 `/` 菜单手动触发
 - `user-invocable: false`：不在用户可调用列表中展示，保留给模型按场景调用
-- `context: fork`：在 forked context 中运行，可配合 `agent` 指定 subagent
+- `context: fork`：在 forked context 中运行，可配合 `agent` 指定 subagent；`v2.1.218+` 默认后台运行
+- `background: false`：只对 `context: fork` 有意义；显式改为前台运行
 
 这些 key 会直接影响加载和调用行为，说明可以中文化，key 不能翻译。
+
+boolean 字段可以写 `true` / `false`，`v2.1.218+` 也接受不区分大小写的 `yes` / `no`、`on` / `off`、`1` / `0`。团队项目仍建议统一一种写法，减少审阅歧义。
 
 ---
 
@@ -335,7 +346,7 @@ export CLAUDE_CODE_DISABLE_BUNDLED_SKILLS=1
 - `"user-invocable-only"`：不向 Claude 展示，但仍允许用户从 `/` 菜单手动调用
 - `"off"`：不向 Claude 展示，也不出现在 `/` 菜单
 
-未出现在 `skillOverrides` 中的 skill 按 `"on"` 处理。plugin skills 不受这个设置影响，应通过 `/plugin` 管理。它也不会把 Project skill 的优先级抬到 Personal skill 之上。
+未出现在 `skillOverrides` 中的 skill 按 `"on"` 处理。plugin skills 不受这个设置影响，应通过 `/plugin` 管理。来源冲突仍遵循 Enterprise > Project > Personal。
 
 ---
 

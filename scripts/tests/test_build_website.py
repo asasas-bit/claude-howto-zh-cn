@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from build_website import (
+    REPO_URL,
     BuildState,
     PageInfo,
     WebsiteConfig,
@@ -28,6 +29,10 @@ from build_website import (
     rewrite_links,
     source_to_site_url,
 )
+
+
+def test_default_repo_url_targets_localized_fork() -> None:
+    assert REPO_URL == "https://github.com/lhfer/claude-howto-zh-cn"
 
 
 @pytest.fixture
@@ -402,7 +407,9 @@ class TestBuildWebsite:
             "cdn.jsdelivr.net",
             "fonts.googleapis.com",
         ):
-            assert hostile not in index_html, f"Built HTML still references {hostile} — CDN should be self-hosted"
+            assert hostile not in index_html, (
+                f"Built HTML still references {hostile} — CDN should be self-hosted"
+            )
 
 
 class TestVendorAssets:

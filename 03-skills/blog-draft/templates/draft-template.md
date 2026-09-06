@@ -50,6 +50,6 @@
 
 ## 参考资料
 
-1. [Source Title](#)
-2. [Source Title](#)
-3. [Source Title](#)
+1. [Source Title](https://docs.example.com/source-1)
+2. [Source Title](https://docs.example.com/source-2)
+3. [Source Title](https://docs.example.com/source-3)

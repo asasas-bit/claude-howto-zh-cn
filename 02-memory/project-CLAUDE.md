@@ -9,8 +9,8 @@
 
 ## 架构
 
-@docs/architecture.md  
-@docs/api-standards.md  
+@docs/architecture.md
+@docs/api-standards.md
 @docs/database-schema.md
 
 ## 开发规范

@@ -6,15 +6,13 @@ on:
     paths:
       - 'scripts/**'
       - '.github/workflows/test.yml'
-      - 'pyproject.toml'
-      - 'requirements*.txt'
+      - '.pre-commit-config.yaml'
   pull_request:
     branches: [main]
     paths:
       - 'scripts/**'
       - '.github/workflows/test.yml'
-      - 'pyproject.toml'
-      - 'requirements*.txt'
+      - '.pre-commit-config.yaml'
 
 # Cancel in-progress runs for the same branch
 concurrency:
@@ -50,7 +48,7 @@ jobs:
         continue-on-error: false
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
           flags: unittests
@@ -88,11 +86,9 @@ jobs:
 
       - name: Ruff Format Check
         run: uv run ruff format --check scripts/
-        continue-on-error: true
 
       - name: Ruff Lint Check
         run: uv run ruff check scripts/
-        continue-on-error: true
 
   security:
     name: Security Scan
@@ -113,8 +109,7 @@ jobs:
           uv pip install "bandit[toml]"
 
       - name: Run Bandit Security Scan
-        run: uv run bandit -c pyproject.toml -r scripts/ --exclude scripts/tests/ -f json -o bandit-report.json
-        continue-on-error: true
+        run: uv run bandit -c scripts/pyproject.toml -r scripts/ --exclude scripts/tests/ -f json -o bandit-report.json
 
       - name: Upload security report
         uses: actions/upload-artifact@v4
@@ -137,20 +132,19 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      - name: Create venv and install mypy
+      - name: Create venv and install dependencies
         run: |
           uv venv
-          uv pip install -r scripts/requirements-dev.txt mypy
+          uv pip install -r scripts/requirements-dev.txt
 
       - name: Run mypy
-        run: uv run mypy scripts/ --ignore-missing-imports --no-implicit-optional
-        continue-on-error: true
+        run: uv run mypy scripts/ --config-file scripts/pyproject.toml
 
   build-epub:
-    name: Build EPUB Artifact
+    name: Build Chinese EPUB Artifact
     runs-on: ubuntu-latest
-    needs: [pytest, lint, security]
-    if: success()
+    needs: [pytest, lint, security, type-check]
+    if: ${{ !failure() && !cancelled() }}
 
     steps:
       - name: Checkout code
@@ -167,8 +161,15 @@ jobs:
           uv venv
           uv pip install -r scripts/requirements-dev.txt
 
+      - name: Install mmdc (Mermaid CLI)
+        run: npm install -g @mermaid-js/mermaid-cli
+
       - name: Build EPUB
-        run: uv run scripts/build_epub.py
+        run: |
+          echo '{"args":["--no-sandbox","--disable-setuid-sandbox"]}' > /tmp/puppeteer-ci.json
+          uv run scripts/build_epub.py \
+            --lang zh \
+            --puppeteer-config /tmp/puppeteer-ci.json
 
       - name: Verify EPUB Created
         run: |
@@ -185,6 +186,7 @@ jobs:
         with:
           name: claude-howto-guide-epub
           path: claude-howto-guide.epub
+          if-no-files-found: error
           retention-days: 7
           compression-level: 0
 
@@ -217,6 +219,9 @@ jobs:
       - name: Check if all tests passed
         if: |
           needs.pytest.result != 'success' ||
+          needs.lint.result != 'success' ||
+          needs.security.result != 'success' ||
+          needs.type-check.result != 'success' ||
           needs.build-epub.result != 'success'
         run: |
           echo "❌ Critical tests failed"

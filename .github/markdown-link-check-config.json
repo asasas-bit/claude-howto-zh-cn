@@ -76,10 +76,10 @@
   "replacementPatterns": [
     {
       "pattern": "^/",
-      "replacement": "https://github.com/luongnv89/claude-howto/blob/main/"
+      "replacement": "https://github.com/lhfer/claude-howto-zh-cn/blob/main/"
     }
   ],
-  "timeout": 10000,
+  "timeout": "10s",
   "retryOn": [429, 503],
   "retryCount": 3,
   "fallbackRetryDelay": 5000,

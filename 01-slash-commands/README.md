@@ -35,12 +35,15 @@ Claude Code 里的 slash commands 大致分四类：
 |------|------|
 | `/help` | 查看帮助和命令列表 |
 | `/clear` | 清空当前会话 |
+| `/compact [instructions]` | 按可选指令压缩对话；`v2.1.216+` 起压缩失败会在界面明确报错，不再静默无反应 |
 | `/config` | 查看或编辑设置 |
-| `/context` | 看上下文使用情况 |
+| `/statusline` | 配置终端底部的自定义状态栏 |
+| `/context` | 看上下文使用情况；`v2.1.216+` 起超过 context window 上限时会显示明确警告 |
 | `/doctor` | 诊断安装、配置和 plugin 健康状态；`v2.1.178+` 起界面改成 flat tree，状态图标更清楚 |
 | `/feedback` / `/bug` | 提交反馈；`v2.1.178+` 起 `/bug` 必须填写描述后才能提交 |
 | `/model` | 切换模型；`v2.1.153+` 起默认保存为后续 session 默认值，选择后按 `s` 才只作用于当前 session |
-| `/effort [low|medium|high|xhigh|max|auto]` | 用交互滑杆调整思考强度；Opus 4.8 默认是 `high`，`xhigh` 适用于 Opus 4.8 / 4.7 |
+| `/effort [low|medium|high|xhigh|max|auto]` | 用交互滑杆调整思考强度；Opus 5 默认是 `high`，支持 `low` 到 `max` |
+| `/fast` | 切换 Fast Mode；`v2.1.219+` 只适用于 Opus 5 和 Opus 4.8 |
 | `/agents` | 查看可用 agents |
 | `/skills` | 查看可用 skills |
 | `/hooks` | 查看 hooks |
@@ -50,8 +53,9 @@ Claude Code 里的 slash commands 大致分四类：
 | `/cd <path>` | 切换当前 session 的工作目录，并尽量保留 prompt cache |
 | `/focus` | 切换 focus view，减少长任务时的视觉干扰 |
 | `/goal <目标>` | 给当前 session 注册一个持续追踪的完成目标 |
-| `/less-permission-prompts` | 分析常见 Bash / MCP 调用，帮你生成更合理的 allowlist |
-| `/code-review [effort]` | 审查当前 diff 的正确性缺陷；可传入 `/code-review high` 这类 effort 参数 |
+| `/fewer-permission-prompts` | 分析常见 Bash / MCP 调用，帮你生成更合理的 allowlist |
+| `/deep-research <topic>` | 深入研究指定主题；`v2.1.218+` 起只会在用户显式调用时运行 |
+| `/code-review [effort]` | 审查当前 diff 的正确性缺陷；可传入 `/code-review high` 这类 effort 参数；`v2.1.215+` 起仅显式调用，`v2.1.218+` 起在后台 subagent 中运行 |
 | `/dataviz` | 图表和 dashboard 设计指导，并附带可运行的调色板校验器（`v2.1.198+`） |
 | `/review <pr>` | 审查 GitHub PR；`v2.1.186+` 起使用和 `/code-review medium` 相同的 review engine，本地 diff 仍优先用 `/code-review` |
 | `/proactive` | `/loop` 的别名 |
@@ -60,7 +64,10 @@ Claude Code 里的 slash commands 大致分四类：
 | `/powerup` | 用交互式 lesson 了解内建能力 |
 | `/rewind` | 回退到 checkpoint |
 | `/undo` | `/rewind` 的别名 |
-| `/resume` | 恢复以前的 session |
+| `/resume` | 恢复以前的 session；无参数时会打开历史 session picker，并把选中的 session 作为后台 session 恢复（`v2.1.212+`） |
+| `/fork [prompt]` | 把当前对话复制成一个独立后台 session；两边从此各自推进，结果不会回传当前对话（`v2.1.212+`） |
+| `/subtask <task>` | 启动继承完整对话的 forked subagent；完成后把结果回传当前对话（`v2.1.212+`） |
+| `/branch [name]` | 切换到当前对话的副本并保留原对话，之后可用 `/resume` 返回 |
 | `/reload-skills` | 重新扫描 skill 目录，不需要重启当前 session |
 | `/workflows` | 查看正在运行和已完成的 dynamic workflows |
 | `/scroll-speed <+N|-N>` | 调整 TUI live preview 的鼠标滚轮滚动速度 |
@@ -74,6 +81,10 @@ Claude Code 里的 slash commands 大致分四类：
 这些命令不用安装，开箱即用。
 
 `/cd <path>` 是 `v2.1.169+` 新增的实用入口。以前中途换目录往往会让 prompt cache 变冷，下一轮更慢也更贵；现在需要在同一个 session 里从前端目录切到后端目录时，优先用 `/cd`，不要为了换目录手动重开一轮。
+
+`/fork`、`/subtask` 和 `/branch` 现在是三种不同操作：`/fork` 创建独立后台 session，`/subtask` 委派一个会回传结果的 forked subagent，`/branch` 则让你本人切换到对话副本。`/fork` 只有在 `v2.1.77` 到 `v2.1.161` 之间曾是 `/branch` 的 alias；从 `v2.1.161` 到 `v2.1.211`，它执行的是如今 `/subtask` 承担的行为。关闭 agent view 时，`/subtask` 不可用，`/fork` 会保留旧的 forked-subagent 行为。
+
+> 独立的 `/output-style` 已在 `v2.1.91` 移除（`v2.1.73` 起弃用）。现在请从 `/config` 的 Output style 选项切换，或设置 `outputStyle`。
 
 > 截至 2026 年 5 月，上游内建命令已经到了 **60+**，并且部分命令会继续改名或调整默认行为。这里保留的是中国小白最该先掌握的一批。
 
@@ -189,10 +200,11 @@ cp 01-slash-commands/optimize.md .claude/commands/
 - `/undo` 新增，作为 `/rewind` 的别名
 - `/proactive` 新增，作为 `/loop` 的别名
 - `/ultrareview` 新增，用云端多代理做综合代码审查
-- `/less-permission-prompts` 新增，会分析常见 Bash / MCP 调用并帮你减少重复权限提示
-- `/effort` 在 Opus 4.8 上默认是 `high`；`xhigh` 适用于 Opus 4.8 / 4.7，`max` 适用于 Opus 4.8 / 4.7 / 4.6 和 Sonnet 4.6
+- `/fewer-permission-prompts` 新增，会分析常见 Bash / MCP 调用并帮你减少重复权限提示
+- Claude Opus 5（`claude-opus-5`、1M context）现在是默认 Opus 模型，默认 effort 为 `high`，支持 `low` 到 `max`
+- `/fast` 从 `v2.1.219+` 起只适用于 Opus 5 和 Opus 4.8；Opus 4.6 / 4.7 不再是 Fast Mode 目标
 - `ultracode` 不是模型 effort level；它会发送 `xhigh` 并让 Claude 编排 dynamic workflows
-- Max 用户在 Opus 4.7+ 上使用 Auto Mode 时，不再强依赖 `--enable-auto-mode`
+- Auto Mode 现在用 `--permission-mode auto` 直接启动；`--enable-auto-mode` 已在 `v2.1.111` 移除
 - `/team-onboarding` 新增，适合自动生成团队上手说明
 - `/ultraplan` 新增，适合端到端计划工作流
 - `/schedule` 更偏向 Cloud scheduled tasks，不再只是本地提醒
@@ -204,11 +216,14 @@ cp 01-slash-commands/optimize.md .claude/commands/
 - `/reload-skills` 新增，用来重新扫描 skill 目录
 - `/workflows` 新增，用来查看 dynamic workflows 的运行记录
 - `/simplify` 在 `v2.1.154+` 后重新成为独立的清理型命令；如果要找正确性缺陷，仍然用 `/code-review`
+- `/deep-research` 从 `v2.1.218+` 起仅显式调用；`/code-review` 同版本起在后台 subagent 中运行，不占满主对话
 - `/doctor` 在 `v2.1.178+` 刷新为 flat tree 布局，状态图标更容易扫读
 - `/bug` 在 `v2.1.178+` 需要先写描述，避免空反馈误提交
 - `/review <pr>` 在 `v2.1.186+` 起不再按“已废弃”理解；它用于审查 GitHub PR，并复用 `/code-review medium` 的 review engine。要审查当前本地工作区 diff，继续用 `/code-review [effort]`
 - `/dataviz` 在 `v2.1.198+` 成为 bundled skill，用于图表、dashboard 和调色板设计
 - `${CLAUDE_PROJECT_DIR}` 在 `v2.1.196+` 可用于 command / skill prompt，表示项目根目录绝对路径
+- `v2.1.212+` 中，`/fork [prompt]` 创建独立后台 session，`/subtask <task>` 启动会回传结果的 forked subagent，`/branch [name]` 则切换到当前对话副本
+- `/resume` 无参数时会打开历史 session picker，其中也包括已从 Agent View 可见列表移除的 session；选中后会作为后台 session 恢复
 
 ---
 

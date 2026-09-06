@@ -32,7 +32,7 @@
 
 ## 当前版本重点
 
-本仓库已按 Claude Code `v2.1.206` 更新中文主线。交互权限模式的新名称是 `manual`（旧 `default` 仍可用）；模型入口新增 Sonnet 5；`/dataviz`、subagent 默认后台运行、MCP `roots/list`、双向 checkpoint summarize 等变化已分别写入对应教程。
+本仓库已跟进 Claude Code `v2.1.220-r2` accuracy pass 及 `4f3fa85` 后续修复。除 Claude Opus 5（`claude-opus-5`）、subagent 默认深度为 3、`/fork` / `/subtask`、MCP scope 等内容外，当前还将中文 EPUB 改为 CI 中使用本地 `mmdc` 严格构建，并明确 5 种 hook 类型与 31 个 hook 事件属于不同分类轴。
 
 ## 资源与脚本
 

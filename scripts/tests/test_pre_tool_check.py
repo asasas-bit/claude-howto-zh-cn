@@ -7,7 +7,6 @@ import os
 import subprocess
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HOOK_SCRIPT = REPO_ROOT / "06-hooks" / "pre-tool-check.sh"
 

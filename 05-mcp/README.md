@@ -11,7 +11,7 @@ MCP（Model Context Protocol）是 Claude Code 用来接入外部工具、服务
 
 ## MCP 解决什么问题
 
-如果没有 MCP，Claude 只能基于你提供的上下文回答。  
+如果没有 MCP，Claude 只能基于你提供的上下文回答。
 有了 MCP，它可以：
 
 - 获取实时数据
@@ -50,7 +50,7 @@ MCP（Model Context Protocol）是 Claude Code 用来接入外部工具、服务
 
 这是上游 2026 年 4 月文档里新增强调的一点。
 
-你可以把 **MCP Apps** 理解成：  
+你可以把 **MCP Apps** 理解成：
 MCP server 不再只能返回纯文本，也可以在聊天界面里直接返回带交互的 UI 组件。
 
 这意味着 MCP 的返回结果可以更像：
@@ -60,7 +60,7 @@ MCP server 不再只能返回纯文本，也可以在聊天界面里直接返回
 - 数据可视化
 - 多步骤工作流界面
 
-对中国小白来说，一个简单理解是：  
+对中国小白来说，一个简单理解是：
 **MCP 不只是“让 Claude 调工具”，还可以把结果做成界面直接塞回聊天里。**
 
 ---
@@ -78,6 +78,29 @@ claude mcp add --transport http notion https://mcp.notion.com/mcp
 ```bash
 claude mcp add --transport stdio myserver -- npx @myorg/mcp-server
 ```
+
+### 选择配置范围
+
+添加 server 时可用 `--scope`（短写 `-s`）决定配置保存位置；省略时默认为 `local`：
+
+| scope | 写法 | 保存位置 | 适用场景 |
+|-------|------|----------|----------|
+| Local | `--scope local` | 当前项目在 `~/.claude.json` 中的条目 | 只给自己在这个项目用 |
+| Project | `--scope project` | 仓库根目录 `.mcp.json` | 提交到 Git，团队共享，首次使用需批准 |
+| User | `--scope user` | `~/.claude.json` | 自己的所有项目共用 |
+
+```bash
+claude mcp add --scope project --transport http github https://api.github.com/mcp
+claude mcp add -s user --transport stdio memory -- npx @modelcontextprotocol/server-memory
+```
+
+脚本化安装时也可以直接传 JSON：
+
+```bash
+claude mcp add-json events-server '{"type":"stdio","command":"npx","args":["@modelcontextprotocol/server-events"]}'
+```
+
+在 `.mcp.json`、`~/.claude.json` 或 `add-json` 中，建议显式写 `type`。stdio server 使用 `"type": "stdio"`；远程 HTTP 配置也接受 `streamable-http` 作为 `http` 的 alias。
 
 ### 登录或登出 MCP server
 
@@ -104,6 +127,13 @@ CLAUDE_PROJECT_DIR=<仓库根目录绝对路径>
 ```bash
 export GITHUB_TOKEN="your_token"
 cp 05-mcp/github-mcp.json .mcp.json
+```
+
+数据库示例从当前 shell 的 `DATABASE_URL` 读取连接串，不要把用户名和密码直接写进仓库：
+
+```bash
+export DATABASE_URL='postgresql://user:password@localhost/mydb'
+cp 05-mcp/database-mcp.json .mcp.json
 ```
 
 如果你想一次挂多个服务：
@@ -144,6 +174,17 @@ cp 05-mcp/multi-mcp.json .mcp.json
 
 同一版本还把 idle timeout 扩展到 stdio servers：默认空闲 30 分钟；单个 server 的 `timeout` 会作为空闲时间下限。这里的 `roots/list`、`notifications/roots/list_changed`、`timeout` 都是协议或配置标识，不能翻译。
 
+## 长时间 MCP tool call 自动转后台
+
+从 `v2.1.212+` 起，MCP tool call 运行超过 2 分钟时会自动转到后台，避免慢工具一直阻塞当前 session。默认阈值是 `120000` 毫秒，可以通过 `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS` 调整：
+
+```bash
+# 改为 5 分钟
+export CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS=300000
+```
+
+这个变量控制“何时转后台”，不要和 `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT` 的无响应中止阈值混为一谈。
+
 ## 托管 MCP 配置
 
 项目提交的 `.mcp.json` 仍需要用户信任。未信任的 workspace 即使在 `.claude/settings.json` 中自行批准了 project MCP，`claude mcp list` / `get` 也不会自动启动它，而会显示 `⏸ Pending approval`。
@@ -175,6 +216,7 @@ server 名、protocol 和 resource path 都属于真实标识。中文说明可�
 MCP 配置是高风险文件，以下内容默认不要翻：
 
 - `mcpServers`
+- `type`，例如 `stdio`、`http`、`streamable-http`
 - server 名称，例如 `github`
 - `command`
 - `args`
@@ -245,10 +287,13 @@ MCP 配置是高风险文件，以下内容默认不要翻：
 - 自 `v2.1.186` 起，可以直接用 `claude mcp login <name>` / `claude mcp logout <name>` 处理 OAuth 登录状态
 - 自 `v2.1.193` 起，启动时会提示哪些 MCP server 仍需要认证，避免“配置看起来有了、实际还没登录”的 server 静默失效
 - 自 `v2.1.193` 起，如果你用 `headersHelper` 提供动态认证头，server 返回 HTTP 401 / 403 时会自动重新调用 helper 刷新凭证，不需要手动断开重连
+- 自 `v2.1.219` 起，`claude mcp list` 和 `/mcp` 会直接显示连接失败的 HTTP 状态与错误文本，不再只给一个模糊的失败标记
+- 自 `v2.1.219` 起，配置值含有隐藏的首尾空白字符时会报警；token、URL、header 值从环境变量注入时尤其要检查
+- 自 `v2.1.219` 起，无效 `--mcp-config` 中的 server 会被跳过，而不是让全部启动失败；交互模式会显示 warning，headless stream-json init event 会在 `mcp_server_errors` 中列出错误
 
 对中文用户来说，这意味着排查“为什么连上了但看起来不能用”时，先跑一次 `/mcp` 往往比盲猜配置更快。
 
-这里的 `login`、`logout`、`--no-browser`、`headersHelper`、HTTP 401 / 403 都是 CLI / 协议标识，不要翻译。
+这里的 `login`、`logout`、`--no-browser`、`--mcp-config`、`headersHelper`、`mcp_server_errors`、HTTP 401 / 403 都是 CLI / 协议标识，不要翻译。
 
 ### 这轮 MCP 生命周期修复值得知道
 

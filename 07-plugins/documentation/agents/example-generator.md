@@ -1,7 +1,7 @@
 ---
 name: example-generator
 description: 示例代码与教程片段专家
-tools: read, write
+tools: Read, Write
 ---
 
 # Example Generator / 示例生成代理

@@ -1,7 +1,6 @@
 ---
-name: Expand Unit Tests
+name: unit-test-expand
 description: 针对未覆盖分支、边界情况和错误路径补全测试
-tags: testing, coverage, unit-tests
 ---
 
 # Expand Unit Tests / 扩展单元测试

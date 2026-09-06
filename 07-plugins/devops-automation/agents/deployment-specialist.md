@@ -1,7 +1,7 @@
 ---
 name: deployment-specialist
 description: 负责部署流程与回滚操作
-tools: read, write, bash, grep
+tools: Read, Write, Bash, Grep
 ---
 
 # Deployment Specialist / 部署代理

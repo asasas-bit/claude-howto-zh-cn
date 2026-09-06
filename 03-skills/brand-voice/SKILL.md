@@ -1,6 +1,7 @@
 ---
-name: brand-voice-consistency
+name: brand-voice
 description: 保持品牌语气和写作风格一致。Use when creating marketing copy, customer communication, public-facing content, or when users mention brand voice, tone, or writing style.
+user-invocable: false
 ---
 
 # 品牌语气技能

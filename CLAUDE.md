@@ -34,8 +34,10 @@ uv run pytest scripts/tests/ -q
 ### EPUB 构建
 
 ```bash
-uv run scripts/build_epub.py
+uv run scripts/build_epub.py --lang zh
 ```
+
+EPUB 的 Mermaid 图使用本地 `mmdc` 渲染，不再访问 Kroki。由于 `mmdc` 依赖的 Chromium 在 arm64 开发机上没有可用构建，EPUB 构建不属于 pre-commit hook，而是由主 CI、自动化测试和标签发布 workflow 强制验证。只有本机已有可用 `mmdc` 时才运行上面的命令。
 
 ### Python 质量检查
 
@@ -63,16 +65,16 @@ scripts/                校验、构建、测试脚本
 
 ## 修改文档时的核心原则
 
-1. 先保兼容，再谈翻译  
+1. 先保兼容，再谈翻译
    任何会被 Claude Code 直接读取或执行的标识，优先保留原样。
 
-2. 先讲用途，再讲命令  
+2. 先讲用途，再讲命令
    中文读者更容易先理解“这是什么 / 什么时候用 / 为什么有价值”，再接受 CLI、配置和脚本细节。
 
-3. 不要把正文写成翻译腔  
+3. 不要把正文写成翻译腔
    优先自然中文表达；必要时保留 `skills`、`CLI`、`hooks`、`MCP`、`subagents` 这类英文术语。
 
-4. 高风险文件少改、谨慎改  
+4. 高风险文件少改、谨慎改
    `.sh`、`.py`、`.json`、`.yml` 默认只同步必要的兼容性变化；注释能不动就不动。
 
 ## 修改示例文件时要特别注意
@@ -94,7 +96,7 @@ scripts/                校验、构建、测试脚本
 1. 改文档或示例
 2. 跑 `uv run python scripts/validate_localization.py`
 3. 跑 `uv run pytest scripts/tests/ -q`
-4. 如果改了 EPUB 构建，再跑 `uv run scripts/build_epub.py`
+4. 如果改了 EPUB 构建，在支持 `mmdc` 的环境运行 `uv run scripts/build_epub.py --lang zh`，并确认远端 EPUB 构建 jobs 通过
 5. 在 `README.md`、`UPSTREAM.md`、`CHANGELOG.md` 里记录最近同步内容
 
 ## 提交信息风格

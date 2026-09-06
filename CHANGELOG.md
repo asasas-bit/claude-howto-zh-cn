@@ -2,6 +2,112 @@
 
 > 本文件保留上游版本信息的时间顺序，但用中文补充阅读说明，方便中文用户快速判断“这个仓库最近同步了什么”。
 
+## 中文版同步 — 2026-08-06
+
+### 上游审阅
+
+- 核对上游范围：`b9a973b` → `4f3fa85`
+- 上游补齐 `v2.1.220-r2` accuracy review 的后续工程修复：EPUB 改为 CI-only、文档切换到本地 `mmdc`、修正 Ruff 实际扫描范围、删除 Kroki 遗留依赖，并修复 Hook 分类与多语言链接
+
+### 中文 fork 处理
+
+- 将仍在使用的 Kroki/httpx EPUB 渲染器改为本地 `mmdc`，保留中文封面、元数据、章节结构、图片嵌入和根目录入口
+- EPUB 从 pre-commit 移到 GitHub Actions；主 CI、自动化测试与标签发布统一安装 `mmdc`，以 `--lang zh` 构建根目录中文版本，并在 Mermaid 失败时严格失败
+- 不复制上游已无对应源码的多语言构建矩阵，也不重新引入 `ja/vi/uk/zh` 目录
+- 删除 `httpx`、`tenacity`，统一 Ruff `v0.15.10+`，修正 tests pattern、Bandit 配置路径与 `B113` 抑制
+- 取消 Ruff、Bandit、mypy 与 Markdown lint 的 `continue-on-error`；新增显式 `.markdownlint.json`，让失败检查不再被 workflow 静默吞掉
+- 按 action 官方兼容说明升级 `codecov-action@v5` 与 `setup-python@v7`，消除旧 Node runner action
+- 更新脚本文档、Hooks 分类说明和本地化回归护栏，不改变 `Claude Code 中文全面上手指南` 默认入口
+
+## 中文版同步 — 2026-08-05
+
+### 上游审阅
+
+- 核对上游范围：`343d6f0` → `b9a973b`
+- 上游这轮是 Claude Code `v2.1.220-r2` accuracy pass，不升级版本号，重点纠正命令、session、Memory、skills、MCP、hooks、checkpoints、plugins 和 settings 示例
+- 关键修复包括 `/fork` / `/subtask` 角色、`/fewer-permission-prompts`、Hook `stderr + exit 2`、MCP `type` / `${DATABASE_URL}`、skill 优先级和 canonical `permissions.defaultMode`
+
+### 中文 fork 处理
+
+- 审阅 258 个上游变更文件，只本土化影响中文主线和可执行性的改动；不复制英文根 README 或多语言 metadata
+- 修复 command、skill、MCP JSON、Hook scripts、context tracker、plugin agents 与 `config-examples.json`
+- 更新 01-10 教程、功能总表、速查卡、概念总览、资源索引和 Index
+- 补充 auto memory、CLAUDE.md 200 行建议、`AGENTS.md`、checkpoint 100 个上限、MCP scopes、Output Styles、Status Line 与 community marketplace
+- 扩展本地化校验，阻止旧命令、旧 session 语义、硬编码凭证、错误 Hook 退出码与无效 frontmatter 回归
+- 修复 pre-commit 对非 commit Bash 命令误跑测试、SessionEnd 提前退出的问题，新增 Hook 回归测试并清零 ShellCheck 警告
+- 将 Pages 的源码链接、绝对路径检查基准与反馈入口留在中文 fork，修复链接检查 timeout 类型与模板空链接，并修正 Ruff 扫描零文件的配置盲点；真实 format、lint、Bandit 与 mypy 检查均通过
+- 不改变 `Claude Code 中文全面上手指南` 默认入口
+
+## 中文版同步 — 2026-07-30
+
+### 上游审阅
+
+- 核对上游范围：`97fc961` → `343d6f0`
+- 上游这轮重点：
+  - 教程覆盖更新到 Claude Code `v2.1.220`，其中 `v2.1.219` 再次反转 subagent 嵌套默认值：现在默认深度为 3，设为 `1` 才会禁用嵌套
+  - Claude Opus 5（`claude-opus-5`、1M context、默认 effort `high`）成为默认 Opus 模型，Fast Mode 只覆盖 Opus 5 与 Opus 4.8
+  - 新增 `/deep-research`、`/code-review`、fork skills、frontmatter boolean、agent name 和 workspace trust 相关行为
+  - hooks 新增 `DirectoryAdded`，总数从 30 增至 31
+  - Auto Mode、dynamic workflows、sandbox、MCP 和 stream-json 增加新的资格、限制和排错入口
+  - 上游撤回此前合入的 Vexilo 社区资源
+
+### 中文 fork 处理
+
+- 将 `v2.1.220` 行为写入中文教程、功能总表、速查卡、概念总览、资源索引和 Index，不照搬英文上游 README
+- 统一 subagent 默认深度、Opus 5、Fast Mode、Auto Mode、31 个 hooks 和 MCP 错误输出的中文口径
+- 保留模型 ID、hook event、settings key、环境变量、CLI flag、frontmatter key 和 skill / agent 名称原文
+- 将 Hooks 自测题和学习建议同步改为 31 个事件
+- 复核 `doc-generator` 已使用正确名称；对仅更新英文页脚、来源和兼容模型的文件不做无意义机械改写
+- 从当前资源索引移除 Vexilo，但保留旧同步日志作为真实历史
+- 扩展本地化校验，锁定本轮关键行为并阻止旧事实回归
+- 不改变 `Claude Code 中文全面上手指南` 默认入口
+- 更新 `README.md`、`UPSTREAM.md` 和 `CHANGELOG.md` 的最近同步记录
+
+## 中文版同步 — 2026-07-23
+
+### 上游审阅
+
+- 核对上游范围：`8f04517` → `97fc961`
+- 上游这轮重点：
+  - 教程覆盖更新到 Claude Code `v2.1.217`，修正 subagent、Auto Mode、Memory、hooks、checkpoints、sandbox 与 CLI 行为
+  - subagent 嵌套改为默认关闭；新增并发上限和显式嵌套深度环境变量
+  - `--enable-auto-mode` 已是无效旧 flag，当前应使用 `--permission-mode auto`
+  - `config-examples.json` 原有 11 组示例包含虚构 schema 和旧模型 ID，现已改成真实 `settings.json` key
+  - `brand-voice` skill、CLAUDE.md 长度建议和 Sonnet 5 兼容说明完成一致性修正
+
+### 中文 fork 处理
+
+- 将 `v2.1.217` 的行为变化写入中文教程、功能总表、速查卡、概念总览、资源索引和 Index，不照搬英文上游 README
+- 重写 JSON 配置示例：保留 key、hook event、permission rule 和模型 ID 原文，仅本土化说明值
+- 清除“subagent 默认最多嵌套 5 层”和 `--enable-auto-mode` 仍可用等过时表述
+- 补充 hook glob 范围、fork source、rewind link protection、Memory `modified` 字段、sandbox 与 telemetry 新入口
+- 对齐 `brand-voice` frontmatter，统一 CLAUDE.md 长度建议，并加入 Vexilo 参考资源
+- 扩展本地化校验，锁定本轮关键行为并阻止无效配置字段回归
+- 上游其他语言目录继续只作参考，不改变 `Claude Code 中文全面上手指南` 默认入口
+- 更新 `README.md`、`UPSTREAM.md` 和 `CHANGELOG.md` 的最近同步记录
+
+## 中文版同步 — 2026-07-19
+
+### 上游审阅
+
+- 核对上游范围：`a645ffe` → `8f04517`
+- 上游这轮重点：
+  - 教程覆盖更新到 Claude Code `v2.1.212`，修正 Memory、session 分支、subagent、MCP、Auto Mode 和 accessibility 行为
+  - CLAUDE.md 文件按范围拼接，不是严格覆盖链；import 最大深度为 4 hops
+  - 这批 session 行为后来由 `v2.1.220-r2` accuracy pass 纠正为 `/fork [prompt]`、`/subtask <task>`、`/branch [name]` 三类边界
+  - 新增 subagent 输出扫描与 spawn 上限、WebSearch 上限、MCP 自动转后台阈值
+  - Auto Mode provider opt-in 自 `v2.1.207` 起不再需要，并新增 `claude auto-mode reset` 与 screen reader mode
+
+### 中文 fork 处理
+
+- 将 `v2.1.212` 的行为变化写入中文教程、功能总表、速查卡、概念总览、资源索引和 Index，不照搬英文上游 README
+- 删除“Memory 8 层覆盖”“`/fork` 是 `/branch` 的兼容别名”“云 provider 仍需 `CLAUDE_CODE_ENABLE_AUTO_MODE=1`”等过时说法
+- 保留命令、路径、JSON key、环境变量、frontmatter 字段和 CLI flags 原文
+- 不引入上游其他语言目录；示例页脚的元数据变化仅记录同步状态，不给中文示例添加无必要页脚
+- 扩展本地化校验，锁定关键新行为并阻止旧内容回归
+- 不改变 `Claude Code 中文全面上手指南` 默认入口
+- 更新 `README.md`、`UPSTREAM.md` 和 `CHANGELOG.md` 的最近同步记录
+
 ## 中文版同步 — 2026-07-12
 
 ### 上游审阅
@@ -442,7 +548,7 @@
 - 核对上游范围：`9c224ff` → `cf92e8e`
 - 上游这轮重点：
   - 同步 Claude Code `v2.1.110` / `v2.1.112`
-  - 新增 `/tui`、`/focus`、`/recap`、`/undo`、`/proactive`、`/ultrareview`、`/less-permission-prompts`
+  - 新增 `/tui`、`/focus`、`/recap`、`/undo`、`/proactive`、`/ultrareview`、`/fewer-permission-prompts`
   - `09-advanced-features` 补充 TUI、session recap、push notifications、Auto Mode 新访问方式
   - CLI / docs 切到 Opus 4.7，并引入 `xhigh` effort
   - plugins 文档新增 background monitors 说明

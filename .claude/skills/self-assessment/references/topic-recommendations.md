@@ -39,7 +39,7 @@
 - 完成标准：hook 能在执行前阻止危险命令
 
 **Hooks（得分 1，需要复习）**:
-- 重点关注：30 个 hook 事件、5 种 hook 类型（`command`、`http`、`mcp_tool`、`prompt`、`agent`）、`SKILL.md` frontmatter 里的 component-scoped hooks、带 `allowedEnvVars` 的 HTTP hooks、`SessionStart` / `CwdChanged` / `FileChanged` 可用的 `CLAUDE_ENV_FILE`
+- 重点关注：31 个 hook 事件、5 种 hook 类型（`command`、`http`、`mcp_tool`、`prompt`、`agent`）、`DirectoryAdded`、`SKILL.md` frontmatter 里的 component-scoped hooks、带 `allowedEnvVars` 的 HTTP hooks、`SessionStart` / `CwdChanged` / `FileChanged` 可用的 `CLAUDE_ENV_FILE`
 - 完成标准：你能创建一个 prompt-based `Stop` hook，以及一个 skill 内的 component-scoped hook
 
 **MCP（得分 0）**:

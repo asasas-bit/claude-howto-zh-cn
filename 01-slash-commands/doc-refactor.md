@@ -1,7 +1,6 @@
 ---
-name: Documentation Refactor
+name: doc-refactor
 description: 按项目类型重组文档结构，提高可读性和可维护性
-tags: documentation, refactoring, organization
 ---
 
 # Documentation Refactor / 文档重构

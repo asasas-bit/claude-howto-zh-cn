@@ -63,6 +63,8 @@ export DATABASE_URL="postgresql://..."
 
 # 项目级 MCP 配置
 cp 05-mcp/github-mcp.json .mcp.json
+claude mcp add --scope project --transport http github https://api.github.com/mcp
+claude mcp add-json events-server '{"type":"stdio","command":"npx","args":["@modelcontextprotocol/server-events"]}'
 
 # CLI 登录 / 登出 MCP server
 claude mcp login github
@@ -96,6 +98,8 @@ claude plugin init my-plugin
 
 ```bash
 # checkpoints 默认自动创建
+# fileCheckpointingEnabled 默认 true；只保留最近 100 个 checkpoints 的文件快照
+# CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING 可关闭文件快照
 # v2.1.191+ 起 /rewind 可以跨过 /clear 回到更早 checkpoint
 /rewind
 ```
@@ -115,7 +119,8 @@ claude plugin init my-plugin
 # 额外用量配置
 /usage-credits       # `/extra-usage` 仍可作为兼容 alias（别名）
 /usage               # v2.1.149+ 成本视图会按类别拆分
-/code-review high    # 正确性缺陷审查
+/deep-research topic # 深入研究主题；v2.1.218+ 起仅显式调用
+/code-review high    # 正确性缺陷审查；v2.1.218+ 起在后台 subagent 中运行
 /review <pr>         # 审查 GitHub PR；本地 diff 仍用 /code-review
 /simplify            # 清理型审查并应用修复，不负责找 bug
 /doctor              # 诊断安装、配置和 plugin 健康
@@ -126,37 +131,59 @@ claude plugin init my-plugin
 /plugin              # marketplace 浏览界面可用搜索栏过滤 plugin
 ultracode            # 触发 dynamic workflows 的关键词，裸词 workflow 不再触发
 /config thinking=false  # 直接设置单个配置项
+/config                 # Output style 在这里切换；/output-style 已移除
+/statusline             # 配置底部状态栏 command
 !npm test            # v2.1.186+ 起输出会自动发给 Claude 并触发回复
 !cat src/index.ts    # v2.1.193+ 起 ! bash mode 支持路径自动补全
-export CLAUDE_CODE_ENABLE_AUTO_MODE=1  # Bedrock / Vertex / Foundry 上显式启用 Auto Mode
+claude auto-mode reset        # 恢复 Auto Mode 默认配置并请求确认
+claude auto-mode reset --yes  # 跳过确认
+# CLAUDE_CODE_ENABLE_AUTO_MODE 从 v2.1.207 起仅保留兼容性，不再产生效果
 export CLAUDE_CODE_DISABLE_MOUSE_CLICKS=1  # 禁用 fullscreen mode 的 click / drag / hover
 CLAUDE_CODE_SAFE_MODE=1 claude          # 禁用自定义项后排查配置问题
 export CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT=600
+export CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS=120000
+export CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION=200
+export CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION=200
+export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=20
+export CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1  # v2.1.219+ 设为 1 可禁用嵌套；默认深度 3
+export CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH=61440
+export FORCE_HYPERLINK=0
+export CLAUDE_AX_SCREEN_READER=1
 export CLAUDE_CODE_RETRY_WATCHDOG=1
 
 # 常见 permission mode
 claude --permission-mode manual
 claude --permission-mode acceptEdits
 claude --permission-mode plan
-claude --permission-mode dontAsk
+claude --permission-mode dontAsk  # 未预先批准的工具自动拒绝
 claude --permission-mode bypassPermissions
+claude --permission-mode auto  # 所有动作经过后台 safety classifier；替代已移除的 --enable-auto-mode
 claude --safe-mode
 claude --fallback-model sonnet
+claude --ax-screen-reader
 
 # session 常用命令
-/resume
+/resume                 # 无参数时打开历史 session picker
 /rename "session-name"
-/branch                # 某些版本中 `/fork` 仍可作为兼容别名
+/fork 尝试 OAuth 方案   # 复制成独立后台 session，不回传结果
+/subtask 检查 flaky tests  # forked subagent 完成后回传结果
+/branch try-oauth       # 切换到对话副本，原对话保留
 claude -c
 claude -r "session-name"
 claude agents --json   # 机器可读的 Agent View 列表
+claude -p --output-format stream-json --forward-subagent-text "query"  # 包含深度 2+ 的 subagent 输出
 git worktree prune     # 清理已解锁且不再使用的 worktree
 
 # settings.json 常见新增 key（key 名不要翻译）
+# outputStyle / statusLine / switchModelsOnFlag
 # wheelScrollAccelerationEnabled
 # footerLinksRegexes
 # language
 # enforceAvailableModels
+# sandbox.filesystem.disabled
+# sandbox.network.strictAllowlist
+# emojiCompletionEnabled
+# workflowSizeGuideline
 
 # permission rule 参数匹配示意（语法不要翻译）
 # Tool(param:value)
@@ -166,6 +193,7 @@ git worktree prune     # 清理已解锁且不再使用的 worktree
 
 # Auto Mode 严格 shell 分类示意（settings key 不要翻译）
 # "autoMode": { "classifyAllShell": true }
+# Team / Enterprise 管理员关闭 Auto Mode："permissions": { "disableAutoMode": "disable" }
 ```
 
 ---
@@ -185,8 +213,10 @@ git worktree prune     # 清理已解锁且不再使用的 worktree
 | Planning Mode | 内建 | `/plan <task>` | 复杂任务规划 |
 | Ultraplan | 内建 | `/ultraplan <task>` | 云端起草复杂计划 |
 | Monitor Tool | 内建 | 监控后台命令 stdout 事件流 | 适合替代轮询 |
+| Auto Mode Reset | 内建 | `claude auto-mode reset [--yes]` | 恢复默认自动权限规则 |
+| Screen Reader Mode | 内建 | `--ax-screen-reader` | 纯文本渲染，便于辅助技术读取 |
 | Print Mode | 内建 | `claude -p` | 脚本 / CI/CD |
-| Run / Verify Skills | bundled skills | `/run`、`/verify`、`/run-skill-generator` | 启动项目并确认改动真实可用 |
+| Run / Verify Skills | bundled skills | `/run`、`/verify`、`/run-skill-generator` | 启动项目并确认改动真实可用；`/verify` 从 `v2.1.215+` 起仅显式调用 |
 
 ---
 

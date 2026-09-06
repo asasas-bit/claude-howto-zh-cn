@@ -124,10 +124,19 @@ model: inherit
 - `memory`
 - `isolation`
 - `maxTurns`
+- `color`
 
 如果你是做中文本地化，这些字段要保真；可以翻译的是下面真正给人看的 system prompt 正文。
 
+从 `v2.1.218+` 起，agent `name` 不能包含 `:`；这个字符保留给 plugin namespace。不要为了中英文分组自行加入冒号。
+
+project agent frontmatter 里的 `hooks` 只有在 agent 文件所在目录通过 workspace trust 后才运行。未信任项目不会借 agent hook 绕过这层安全边界。
+
 `background: true` 的含义也发生了变化：从 `v2.1.198+` 起，subagents 默认就在后台运行；显式写 `true` 是强制它始终后台运行，并阻止 inline execution。
+
+`effort` 可写 `low`、`medium`、`high`、`xhigh` 或 `max`，实际可用范围取决于模型。`permissionMode` 才是覆盖 subagent 权限模式的 frontmatter 字段；从 `v2.1.212+` 起，Task tool 调用参数里的 `mode` 已弃用并会被忽略，未写 `permissionMode` 时 subagent 继承父 session 的权限模式。
+
+`color` 控制任务列表和 transcript 中的 subagent 显示色，可写 `red`、`blue`、`green`、`yellow`、`purple`、`orange`、`pink` 或 `cyan`。这些枚举值是可执行标识，不要翻译。
 
 ---
 
@@ -195,7 +204,7 @@ cp 04-subagents/code-reviewer.md .claude/agents/
 - `subagents`：主 Claude 委派一个边界清晰的子任务，等它把结果带回来
 - `Agent Teams`：多个 Claude Code 实例协作，彼此有独立上下文窗口，还能直接通信
 
-对绝大多数中国小白用户来说，先掌握 subagents 就足够了。  
+对绝大多数中国小白用户来说，先掌握 subagents 就足够了。
 `Agent Teams` 依然是实验性能力，更适合复杂协作场景，细节放在 [09-advanced-features](../09-advanced-features/) 里看。
 
 ### Agent Teams 的 iTerm2 显示模式
@@ -220,14 +229,13 @@ cp 04-subagents/code-reviewer.md .claude/agents/
 这对“skill + subagent” 组合工作流很重要。
 如果你以前感觉主 Claude 会用某个 skill，但一委派给 subagent 就像“忘了这项能力”，新版应该按统一目录发现逻辑来理解。
 
-### 这轮上游要补的第二点：subagent 可以再 spawn 子 subagent
+### subagent 嵌套现在默认深度为 3
 
-从 `v2.1.172+` 起，subagent 不再只能停留在“主 session -> subagent”这一层。
-它可以继续 spawn 自己的子 subagent，最多嵌套 5 层。
+从 `v2.1.219` 起，subagent 默认可以继续 spawn 子 subagent，默认深度为 3。设置 `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1` 会禁用嵌套；设为其他正整数则覆盖最大深度。
 
-这对复杂任务有用，比如一个 `implementation-agent` 再把安全检查交给 `secure-reviewer`，把测试补齐交给 `test-engineer`。但也要控制边界，否则多层委派很容易让成本和上下文流向变得难追。
+历史口径要分三段看：`v2.1.172` 到 `v2.1.216` 默认最多 5 层且不能配置；`v2.1.217` 到 `v2.1.218` 默认深度为 1，也就是嵌套关闭；`v2.1.219` 再把默认值改为 3。复杂任务可以利用嵌套分工，但仍要结合并发、权限和成本边界控制。
 
-如果你要限制某个 subagent 能 spawn 哪些子 agent，使用 `Agent(agent_type)` 这种权限限制语法。这里的 `Agent(agent_type)` 是可执行标识，不要翻译成中文字段。
+如果你要限制某个 subagent 能 spawn 哪些子 agent，使用 `Agent(agent_type)` 这种权限限制语法。这里的 `Agent(agent_type)`、`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 都是可执行标识，不要翻译成中文字段。
 
 ### `v2.1.198+` 的默认后台运行和模型继承
 
@@ -318,6 +326,23 @@ cp 04-subagents/code-reviewer.md .claude/agents/
 - 长任务里做 A/B 方案对比
 
 如果你的目标是“保留主线上下文，再开一条支线试试”，就该优先考虑 forked subagents。
+
+## subagent 输出安全扫描与 session 限额
+
+从 `v2.1.210+` 起，Claude Code 会扫描每个 subagent 的最终报告，识别伪造的 `<system-reminder>`、`Human:` / `Assistant:` 对话或权限绕过提示等 instruction-shaped text。命中后，系统会转义或插入标记；父 session 应把它当作需要转述的发现，而不是待执行的指令。该扫描默认开启，没有公开的关闭入口，引用真实安全 flag 时也可能出现宁可多报的 false positive。
+
+从 `v2.1.212+` 起，每个 session 默认最多 spawn **200** 个 subagents，防止委派循环失控。可用 `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION` 调整；执行 `/clear` 会重置这项预算。
+
+当前还有两层独立限制：
+
+- `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`：同一时间最多运行多少个 subagents，默认 `20`
+- `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`：允许嵌套 spawn 的最大深度；`v2.1.219+` 默认 `3`，设为 `1` 可禁用嵌套
+
+```bash
+export CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION=200
+export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=20
+export CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1  # 禁用嵌套；不设置时默认深度为 3
+```
 
 ---
 

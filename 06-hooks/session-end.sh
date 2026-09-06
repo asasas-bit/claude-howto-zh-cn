@@ -98,3 +98,5 @@ if [ -n "$NOTES" ]; then
   printf '备注：%s\n' "$NOTES"
 fi
 printf '\n'
+
+exit 0

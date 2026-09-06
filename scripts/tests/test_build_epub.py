@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
 from bs4 import BeautifulSoup
 from ebooklib import epub
@@ -18,6 +18,7 @@ from build_epub import (
     ChapterCollector,
     EPUBConfig,
     MermaidRenderer,
+    MermaidRenderError,
     ValidationError,
     create_chapter_html,
     create_cover_image,
@@ -106,9 +107,8 @@ class TestEPUBConfig:
         assert config.title == "Claude Code 中文全面上手指南"
         assert config.language == "zh"
         assert config.author == "claude-howto-zh-cn contributors"
-        assert config.request_timeout == 30.0
-        assert config.max_concurrent_requests == 10
-        assert config.max_retries == 3
+        assert config.mmdc_path == "mmdc"
+        assert config.puppeteer_config is None
 
     def test_custom_values(self, tmp_path: Path) -> None:
         """Test that custom values override defaults."""
@@ -116,12 +116,12 @@ class TestEPUBConfig:
             root_path=tmp_path,
             output_path=tmp_path / "out.epub",
             title="Custom Title",
-            request_timeout=60.0,
-            max_concurrent_requests=5,
+            mmdc_path="/usr/local/bin/mmdc",
+            puppeteer_config="puppeteer.json",
         )
         assert config.title == "Custom Title"
-        assert config.request_timeout == 60.0
-        assert config.max_concurrent_requests == 5
+        assert config.mmdc_path == "/usr/local/bin/mmdc"
+        assert config.puppeteer_config == "puppeteer.json"
 
 
 # =============================================================================
@@ -274,22 +274,105 @@ graph TD
         # Should only have one diagram since they're identical
         assert len(diagrams) == 1
 
-    @pytest.mark.asyncio
-    async def test_mermaid_render_timeout_keeps_build_going(
+    def test_mermaid_render_success(
         self, config: EPUBConfig, state: BuildState, logger: logging.Logger
     ) -> None:
-        """A Kroki timeout should not fail the whole EPUB build."""
+        """Local mmdc output is cached and returned as an EPUB image."""
+        renderer = MermaidRenderer(config, state, logger)
+        fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/mmdc"),
+            patch("subprocess.run") as run,
+            patch("pathlib.Path.is_file", return_value=True),
+            patch("pathlib.Path.read_bytes", return_value=fake_png),
+        ):
+            run.return_value = MagicMock(returncode=0, stderr="", stdout="")
+            rendered = renderer.render_all([(1, "graph TD\n    A --> B")])
+
+        assert len(rendered) == 1
+        assert next(iter(rendered.values())) == (fake_png, "mermaid_1.png")
+        assert run.call_count == 1
+
+    def test_mermaid_render_passes_puppeteer_config(
+        self, config: EPUBConfig, state: BuildState, logger: logging.Logger
+    ) -> None:
+        """Container sandbox settings are forwarded to mmdc with -p."""
+        config.puppeteer_config = "/tmp/puppeteer.json"
         renderer = MermaidRenderer(config, state, logger)
 
-        with patch.object(
-            renderer,
-            "_fetch_with_retry",
-            side_effect=httpx.ReadTimeout("timed out"),
+        with (
+            patch("shutil.which", return_value="/usr/bin/mmdc"),
+            patch("subprocess.run") as run,
+            patch("pathlib.Path.is_file", return_value=True),
+            patch("pathlib.Path.read_bytes", return_value=b"png"),
         ):
-            rendered = await renderer.render_all([(1, "graph TD\n    A --> B")])
+            run.return_value = MagicMock(returncode=0, stderr="", stdout="")
+            renderer.render_all([(1, "graph TD\n    A --> B")])
 
-        assert rendered == {}
-        assert state.mermaid_cache == {}
+        command = run.call_args.args[0]
+        assert command[-2:] == ["-p", "/tmp/puppeteer.json"]
+
+    def test_mermaid_render_requires_mmdc(
+        self, config: EPUBConfig, state: BuildState, logger: logging.Logger
+    ) -> None:
+        """A missing mmdc binary fails the CI build with installation guidance."""
+        renderer = MermaidRenderer(config, state, logger)
+
+        with (
+            patch("shutil.which", return_value=None),
+            pytest.raises(MermaidRenderError, match="mmdc not found"),
+        ):
+            renderer.render_all([(1, "graph TD\n    A --> B")])
+
+    def test_mermaid_render_failure_is_strict(
+        self, config: EPUBConfig, state: BuildState, logger: logging.Logger
+    ) -> None:
+        """A Mermaid parse error fails instead of silently shipping source code."""
+        renderer = MermaidRenderer(config, state, logger)
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/mmdc"),
+            patch("subprocess.run") as run,
+            pytest.raises(MermaidRenderError, match="parse error"),
+        ):
+            run.return_value = MagicMock(returncode=1, stderr="parse error", stdout="")
+            renderer.render_all([(1, "not valid Mermaid")])
+
+    def test_mermaid_render_timeout_is_strict(
+        self, config: EPUBConfig, state: BuildState, logger: logging.Logger
+    ) -> None:
+        """A hung Chromium process fails the build after the fixed timeout."""
+        renderer = MermaidRenderer(config, state, logger)
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/mmdc"),
+            patch(
+                "subprocess.run",
+                side_effect=subprocess.TimeoutExpired("mmdc", 60),
+            ),
+            pytest.raises(MermaidRenderError, match="timed out"),
+        ):
+            renderer.render_all([(1, "graph TD\n    A --> B")])
+
+    def test_mermaid_render_deduplicates_identical_diagrams(
+        self, config: EPUBConfig, state: BuildState, logger: logging.Logger
+    ) -> None:
+        """Repeated diagrams invoke mmdc once and reuse the cached image."""
+        renderer = MermaidRenderer(config, state, logger)
+        diagram = "graph TD\n    A --> B"
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/mmdc"),
+            patch("subprocess.run") as run,
+            patch("pathlib.Path.is_file", return_value=True),
+            patch("pathlib.Path.read_bytes", return_value=b"png"),
+        ):
+            run.return_value = MagicMock(returncode=0, stderr="", stdout="")
+            rendered = renderer.render_all([(1, diagram), (2, diagram)])
+
+        assert run.call_count == 1
+        assert len(rendered) == 1
 
     def test_unrendered_mermaid_block_falls_back_to_source(
         self, state: BuildState, logger: logging.Logger
@@ -534,8 +617,7 @@ class TestLogging:
 class TestIntegration:
     """Integration tests for the full build process."""
 
-    @pytest.mark.asyncio
-    async def test_build_without_mermaid(
+    def test_build_without_mermaid(
         self, tmp_project: Path, logger: logging.Logger
     ) -> None:
         """Test building an EPUB without Mermaid diagrams."""
@@ -550,7 +632,7 @@ class TestIntegration:
         with patch("build_epub.get_chapter_order") as mock_order:
             mock_order.return_value = [("README.md", "Introduction")]
 
-            result = await build_epub_async(config, logger)
+            result = build_epub_async(config, logger)
 
             assert result.exists()
             assert result.suffix == ".epub"

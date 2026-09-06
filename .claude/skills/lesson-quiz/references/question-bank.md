@@ -163,11 +163,11 @@
 
 ### Q9
 - **Category**: conceptual
-- **Question**: 低优先级 memory 层级能覆盖高优先级层级里的规则吗？
-- **Options**: A) 可以，最新规则永远优先 | B) 不可以，高优先级层级始终优先 | C) 可以，只要低层级使用 `!important` | D) 取决于规则类型
+- **Question**: 多个不同范围的 `CLAUDE.md` 同时加载时，Claude Code 如何处理它们？
+- **Options**: A) 只保留范围最窄的一份 | B) 按 Managed、User、Project、Local 范围拼接进上下文，而不是严格覆盖 | C) 只保留最近修改的一份 | D) 全部转成 auto memory
 - **Correct**: B
-- **Explanation**: memory 优先级从 Managed Policy 等高层级向下生效，低层级（例如 Auto Memory）不能覆盖高层级规则。
-- **Review**: memory 层级与优先级
+- **Explanation**: `CLAUDE.md` 文件会按范围拼接进上下文；auto memory 和 `.claude/rules/*.md` 是独立的相关机制，不能混成一条严格覆盖链。
+- **Review**: 两套 memory 机制与 CLAUDE.md 加载顺序
 
 ### Q10
 - **Category**: practical
@@ -500,9 +500,9 @@
 ### Q9
 - **Category**: conceptual
 - **Question**: Claude Code 一共支持多少种 hook events？
-- **Options**: A) 10 | B) 16 | C) 25 | D) 30
+- **Options**: A) 16 | B) 25 | C) 30 | D) 31
 - **Correct**: D
-- **Explanation**: 当前教程按 Claude Code `v2.1.152+` 的口径记录 30 个 hook 事件、5 种 hook 类型；不要再沿用旧资料里的 25、28 或 29 个事件。
+- **Explanation**: 当前教程按 Claude Code `v2.1.219+` 的口径记录 31 个 hook 事件、5 种 hook 类型；新增事件是 `DirectoryAdded`，不要再沿用旧资料里的 25、28、29 或 30 个事件。
 - **Review**: 常见事件
 
 ### Q10

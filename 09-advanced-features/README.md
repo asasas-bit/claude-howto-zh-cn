@@ -114,6 +114,8 @@ claude --permission-mode plan
 
 > `v2.1.136` 之后要特别注意：plan mode 现在会**无条件阻止所有文件写入**。即使你在 `permissions.allow` 里配过宽松的 `Edit(...)` 规则，也不能再绕过去。如果旧工作流依赖这种行为，现在必须先退出 plan mode，再做编辑。
 
+> `v2.1.218+` 还要区分 shell 与写文件：当 Auto Mode 可用且默认开启的 `useAutoModeDuringPlan` 生效时，plan mode 会把 shell command 交给 classifier，而不是弹权限询问；获批命令可以运行，被拒命令会阻止。文件写入仍然无条件禁止。
+
 ## Ultraplan（深度计划）
 
 `/ultraplan` 会把“起草计划”这一步交给 Claude Code on the web 的云端会话来完成。你本地终端不用一直等着，等云端把 plan 草案写好后，再去浏览器审阅，并决定继续在云端执行，还是把计划带回本地终端落地。
@@ -161,10 +163,10 @@ claude --permission-mode plan
 
 当草案准备好后，你通常有两条路：
 
-1. **继续在云端执行**  
+1. **继续在云端执行**
    直接在浏览器里批准计划，让 Claude 在云端继续实现，并从 web 侧发起 PR。
 
-2. **把计划带回本地终端**  
+2. **把计划带回本地终端**
    适合你更想在本地环境里继续做实现、跑测试和手工检查。
 
 如果你选择带回本地，常见分支是：
@@ -188,7 +190,7 @@ extended thinking 的价值在于：让 Claude 对复杂问题多想一步，而
 - 高歧义问题
 - 边界条件分析
 
-对中国用户来说，一个实用理解是：  
+对中国用户来说，一个实用理解是：
 **不是所有问题都要更长思考，但复杂问题最好别让 Claude 秒答。**
 
 这轮上游纠正了一个容易误传的点：不要再把 `/think` 当成有效 slash command。
@@ -218,20 +220,28 @@ Auto Mode 属于更偏自动化、也更需要谨慎的能力。
 
 ### 当前要求要看清
 
-截至 2026 年 6 月，上游文档里对 Auto Mode 的要求已经更明确：
+从 `v2.1.219+` 的当前口径看，Auto Mode 面向所有 plans，但仍受组织策略、模型和 provider 资格限制。Team / Enterprise 默认可用；管理员可在 managed settings 中把 `permissions.disableAutoMode` 设为 `"disable"` 来关闭。
 
-- 不是 Pro / Max 就能直接用
-- 更偏向 Team、Enterprise 或 API 场景
-- Max 用户在 Opus 4.7+ 上已经不再强依赖 `--enable-auto-mode`
-- 在 Bedrock / Vertex / Foundry 上使用 Opus 4.7 / 4.8 时，需要显式设置 `CLAUDE_CODE_ENABLE_AUTO_MODE=1`
+- Anthropic API 与 Claude Platform on AWS：支持 Opus 5、Opus 4.6+、Sonnet 4.6+ 和 Fable 5
+- Bedrock、Vertex AI、Microsoft Foundry 与已登录的 Claude apps gateway session：支持 Opus 5、Sonnet 5、Opus 4.7+ 和 Fable 5
+- Sonnet 4.5、Opus 4.5、Haiku 与 claude-3 系列不支持 Auto Mode
 
-如果你看到旧资料写得很宽泛，优先以最新官方能力范围为准。
+从 `v2.1.207` 起，上述 provider 不再需要 `CLAUDE_CODE_ENABLE_AUTO_MODE=1`。这个旧环境变量仍会被接受以兼容历史脚本，但已经不产生效果；后台 classifier 使用 Sonnet 4.6，会产生额外 token 成本。
+
+需要恢复 Auto Mode 默认配置时，`v2.1.212+` 可以运行：
+
+```bash
+claude auto-mode reset
+claude auto-mode reset --yes
+```
+
+第一条会请求确认，`--yes` 用于跳过确认。看到旧资料时，优先核对当前版本和组织策略，不要继续复制旧的 opt-in 环境变量。
 
 ---
 
-## 没有 Team plan 时的替代方案：一次性权限种子脚本
+## 不想使用后台分类器时的替代方案：一次性权限种子脚本
 
-如果你没有 Team plan，或者你不想用“后台分类器 + 自动判定”这套模式，上游最近新增了一种更务实的替代方案：
+如果你不想用“后台分类器 + 自动判定”这套模式，上游提供了一种更务实的替代方案：
 
 - 直接用一次性脚本把一组 **更保守的安全权限基线** 写进 `~/.claude/settings.json`
 
@@ -315,6 +325,8 @@ python3 09-advanced-features/setup-auto-mode-permissions.py --include-gh-read --
 - `terraform destroy`、`pulumi destroy`、`cdk destroy`
 
 这属于内置 intent-based protection，不需要你手工把这些命令都塞进 `hard_deny`。但团队里仍建议把真正不可接受的组织规则写进 `autoMode.hard_deny`，两层保护不要混为一谈。
+
+从 `v2.1.218+` 起，针对 filesystem root 或 home 的删除（包括 command / process substitution 里的 `rm -rf /`、`rm -rf ~`）也交给 classifier 判定，不再另开 permission dialog。这里仍然不是“自动放行”，而是改由分类器按意图批准或拒绝。
 
 ### `autoMode.classifyAllShell`：让所有 shell 命令都过分类器
 
@@ -410,7 +422,7 @@ Monitor Tool 是上游最近更明确写进文档的新重点。它的核心价�
 - 而是直接盯住后台命令的 stdout 事件流
 - 一旦匹配到事件，就立刻唤醒当前会话
 
-简单说：  
+简单说：
 **它适合“等某件事发生”这种场景，比低效轮询更省 token，也更及时。**
 
 ### 它为什么值得学
@@ -485,11 +497,11 @@ permission modes 决定 Claude 在本地能做什么，以及什么时候会请�
 | `manual` | 日常安全使用；读取文件不提示，其他操作按规则询问 |
 | `acceptEdits` | 希望编辑流畅一些 |
 | `plan` | 只想分析，不想改 |
-| `dontAsk` | 非交互脚本 |
+| `dontAsk` | 只运行预先批准的工具，其他请求自动拒绝，不弹确认 |
 | `bypassPermissions` | 可信环境中的强自动化 |
-| `auto` | 有更高自动化诉求、且明确接受风险 |
+| `auto` | 所有动作都可执行，但会经过后台 safety classifier 检查 |
 
-从 `v2.1.200+` 起，CLI、`--help`、VS Code 和 JetBrains 中原来的交互 `default` 模式统一显示为 `manual`。兼容性没有被切断：`--permission-mode manual` 与 `--permission-mode default` 都能用，settings 中的 `"defaultMode": "manual"` 与 `"defaultMode": "default"` 也都能用。`v2.1.203+` 起，处于 Manual 时 footer 会显示灰色 `⏸` badge。
+从 `v2.1.200+` 起，CLI、`--help`、VS Code 和 JetBrains 中原来的交互 `default` 模式统一显示为 `manual`。兼容性没有被切断：`--permission-mode manual` 与 `--permission-mode default` 都能用，settings 中也兼容旧值；新配置应写规范形式 `"permissions": {"defaultMode": "manual"}`。settings key 是 `permissions.defaultMode`，不存在 `permissions.mode`。`v2.1.203+` 起，处于 Manual 时 footer 会显示灰色 `⏸` badge。
 
 从 `v2.1.160` 起，即使处在 `acceptEdits`，Claude Code 在写入 shell 启动文件和可能执行命令的构建配置前仍会提示确认。例如 `.zshenv`、`.zlogin`、`.bash_login`、`~/.config/git/`、`.npmrc`、`.yarnrc*`、`bunfig.toml`、`.bazelrc`、`.pre-commit-config.yaml`、`.devcontainer/`。
 
@@ -512,7 +524,7 @@ permission modes 决定 Claude 在本地能做什么，以及什么时候会请�
 
 ### 一个常见误区
 
-很多人以为权限模式只是“麻烦不麻烦”。  
+很多人以为权限模式只是“麻烦不麻烦”。
 其实它决定的是：
 
 - 风险控制
@@ -624,7 +636,7 @@ Channels 是 Research Preview 能力，可以把外部服务的事件推送进�
 - iMessage
 - Webhooks
 
-对中国用户来说，一个简单理解是：  
+对中国用户来说，一个简单理解是：
 **不是 Claude 主动轮询外部系统，而是外部事件直接推到你的会话里。**
 
 如果你还在早期上手阶段，知道它存在就够了；等你真的要做实时通知流，再重点看权限和网络环境。
@@ -643,13 +655,69 @@ session 管理能力在任务复杂后会非常重要。
 
 常见操作：
 
-- `/resume`
+- `/resume`：无参数时打开历史 session picker，并将选中的 session 作为后台 session 恢复（`v2.1.212+`）
 - `/rename`
-- `/branch`（较新的主名称，部分环境中 `/fork` 仍可能作为兼容别名出现）
+- `/fork [prompt]`：复制当前对话为独立后台 session；新旧 session 之后各自推进，不回传结果（`v2.1.212+`）
+- `/subtask <task>`：启动继承完整对话的 forked subagent，完成后把结果回传当前对话（`v2.1.212+`）
+- `/branch [name]`：切换到当前对话的副本，原对话保留
 - `claude -c`
 - `claude -r "session-name"`
 
-如果你不命名 session，后期会越来越难管理。
+`/fork` 只在 `v2.1.77` 到 `v2.1.161` 之间曾是 `/branch` 的 alias；从 `v2.1.161` 到 `v2.1.211`，它执行的是如今 `/subtask` 承担的 forked-subagent 行为。关闭 agent view 时，`/subtask` 不可用，`/fork` 会保留旧行为。如果你不命名 session，后期会越来越难管理。
+
+---
+
+## Output Styles（输出风格）
+
+Output Styles 改变 Claude 每轮回答的角色、语气和默认格式，不是项目知识库。项目约定仍应写进 `CLAUDE.md`，任务流程则更适合 skill。
+
+内建风格包括：
+
+- **Default**：默认的软件工程工作方式
+- **Proactive**：更主动执行并做合理假设，但不会改变 permission mode
+- **Explanatory**：在步骤间解释实现选择和代码模式
+- **Learning**：协作式学习，并留下少量 `TODO(human)` 让你参与实现
+
+从 `/config` 的 **Output style** 选择，或直接设置：
+
+```json
+{
+  "outputStyle": "Explanatory"
+}
+```
+
+独立的 `/output-style` 已在 `v2.1.91` 移除（`v2.1.73` 起弃用）。更改 system prompt 后，应在新 session 或 `/clear` 后使用。自定义风格放在 `~/.claude/output-styles/` 或项目 `.claude/output-styles/`；如果只是改变表达方式但仍要保留编码指令，在 frontmatter 写 `keep-coding-instructions: true`。
+
+---
+
+## Status Line（状态栏）
+
+`/statusline` 可配置终端底部状态栏。Claude Code 会把 session、model、cost、context、repo 和 worktree 等字段组成 JSON，从 stdin 传给你的 command：
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh",
+    "padding": 0
+  }
+}
+```
+
+脚本可读取 `model.id`、`effort.level`、`context_window.used_percentage`、`cost.total_cost_usd`、`workspace.project_dir` 等字段。项目里的 status-line command 需要 workspace trust；脚本还会收到 `COLUMNS` 和 `LINES`，可按终端尺寸调整输出。
+
+---
+
+## 屏幕阅读器模式
+
+从 `v2.1.208+` 起，Claude Code 提供纯文本渲染模式，减少全屏 TUI 对 screen reader 的干扰。以下三种入口效果相同：
+
+```bash
+claude --ax-screen-reader
+export CLAUDE_AX_SCREEN_READER=1
+```
+
+也可以在 settings 中设置 `"axScreenReader": true`。`--ax-screen-reader`、`CLAUDE_AX_SCREEN_READER` 和 `axScreenReader` 都是可执行标识，不要翻译。
 
 ---
 
@@ -689,6 +757,8 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
 从 `v2.1.160` 起，dynamic workflows 的触发关键词是 `ultracode`；只写裸词 `workflow` 不再触发运行。文档、prompt 模板和团队 SOP 里如果还写“说 workflow 就会启动”，需要改成新口径。
 
+从 `v2.1.219+` 起，dynamic workflows 默认采用 medium size guideline，目标少于 15 个 agents。可在 `/config` 的 **Dynamic workflow size** 中选其他规模或 unrestricted，也可以在 settings 中写 `workflowSizeGuideline`。它是 Claude 力求遵守的建议，不是像 `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` 那样的硬上限；settings 已设置该 key 时，`/config` 会隐藏对应行。
+
 如果你的任务只是普通单文件修复，不需要急着用它；它更适合“覆盖面很大、需要确定性拆分”的工程任务。
 
 ---
@@ -701,7 +771,7 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 - 在本地和云端之间接力
 - 用 desktop 做更好的可视化 diff 或会话管理
 
-对于新手，先知道它们存在即可。  
+对于新手，先知道它们存在即可。
 真正要用时，再重点看网络和权限环境。
 
 ---
@@ -765,7 +835,11 @@ sandboxing 的核心不是“更麻烦”，而是“更安全地控制 Claude �
 - `sandbox.allowAppleEvents`：macOS 上显式允许 sandboxed commands 发送 Apple Events
 - `sandbox.credentials`：阻止 sandboxed commands 读取 credential files 和 secret environment variables
 
-如果你在公司设备或含有生产凭证的机器上跑自动化，优先关注 `sandbox.credentials`；它不是“中文化字段”，必须按原 key 写。
+`v2.1.216+` 新增 `sandbox.filesystem.disabled`：跳过文件系统隔离，但继续执行网络出口限制。它适合“文件 sandbox 会破坏工具链、但仍必须限制网络访问”的场景，只允许从 user settings、managed settings 或 `--settings` 提供；project settings 不能开启。
+
+`v2.1.219+` 新增 `sandbox.network.strictAllowlist`：sandboxed command 访问不在 allowlist 中的 host 时直接拒绝，不再弹出询问。需要“未列入即拒绝”的企业网络边界时再启用。
+
+如果你在公司设备或含有生产凭证的机器上跑自动化，优先关注 `sandbox.credentials`；这些都不是“中文化字段”，必须按原 key 写。
 
 ---
 
@@ -788,14 +862,22 @@ sandboxing 的核心不是“更麻烦”，而是“更安全地控制 Claude �
 
 如果你想长期高效使用 Claude Code，这一步绕不过去。
 
-### 两个新增的个人设置
+本目录的 [`config-examples.json`](config-examples.json) 提供 11 组可解析示例。最外层 `name` / `description` 是中文索引信息，真正可复制到 `settings.json` 的内容位于每组 `config` 中；其中 key、permission rule、hook event 和模型 ID 都保持原样。
+
+### 值得注意的 settings
 
 | setting | 用途 |
 |---------|------|
 | `askUserQuestionTimeout` | 给无人回答的 `AskUserQuestion` 设置空闲超时并自动继续。`v2.1.200+` 默认不再自动继续；只有显式配置这个 key 才恢复定时行为 |
 | `enableArtifact` | 按用户启用或禁用 Artifact tool（`v2.1.196+`） |
+| `permissions.disableAutoMode` | 在 managed settings 中设为 `"disable"`，关闭 Team / Enterprise 默认可用的 Auto Mode |
+| `axScreenReader` | 设为 `true` 后启用纯文本 screen reader 渲染模式（`v2.1.208+`） |
+| `sandbox.filesystem.disabled` | 跳过 filesystem isolation，但保留 network isolation（`v2.1.216+`） |
+| `sandbox.network.strictAllowlist` | 非 allowlist host 直接拒绝，不弹权限询问（`v2.1.219+`） |
+| `emojiCompletionEnabled` | 控制 prompt 输入框的 emoji shortcode 自动补全，例如 `:heart:`（`v2.1.217+`） |
+| `workflowSizeGuideline` | dynamic workflow 的建议规模；默认 medium，目标少于 15 个 agents（`v2.1.219+`） |
 
-这两个 key 可以放在 `~/.claude/settings.json` 或项目 settings 中，key 名不要翻译。
+这些 key 名不要翻译。`askUserQuestionTimeout`、`enableArtifact`、`axScreenReader` 和 `workflowSizeGuideline` 可用于常规 settings；`permissions.disableAutoMode` 是管理员使用的 managed setting。
 
 ### `/config` 可以直接写 `key=value`
 
@@ -821,6 +903,14 @@ sandboxing 的核心不是“更麻烦”，而是“更安全地控制 Claude �
 - `CLAUDE_CODE_MAX_RETRIES`（控制 API retry 次数；`v2.1.186+` 起最多 15 次）
 - `CLAUDE_CODE_RETRY_WATCHDOG`（适合无人值守 session 的 retry 控制，不建议一味抬高 `CLAUDE_CODE_MAX_RETRIES`）
 - `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`（覆盖 remote MCP tool 5 分钟无响应 abort 的默认值，适合排查长时间挂起的 MCP 调用）
+- `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION`（每个 session 的 WebSearch 调用上限，默认 200；`v2.1.212+`）
+- `CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION`（每个 session 的 subagent spawn 上限，默认 200；`/clear` 会重置预算）
+- `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`（同时运行的 subagents 上限，默认 20；`v2.1.217+`）
+- `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`（允许嵌套 spawn 的最大深度；`v2.1.219+` 默认 3，设为 `1` 可禁用嵌套）
+- `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS`（MCP tool call 自动转后台的阈值，默认 `120000` 毫秒）
+- `CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH`（OpenTelemetry content attribute 的截断上限，默认 60 KB；`v2.1.214+`）
+- `FORCE_HYPERLINK=0`（关闭 footer 里的可点击 PR badge 链接；`v2.1.217+`）
+- `CLAUDE_AX_SCREEN_READER=1`（启用纯文本 screen reader 渲染模式）
 
 这里还有两个这轮很值得知道的行为修正：
 
@@ -848,10 +938,11 @@ sandboxing 的核心不是“更麻烦”，而是“更安全地控制 Claude �
 
 ## effort level 这轮要纠正的一个误解
 
-上游这次把模型和 effort level 的关系又更新了一轮，核心变化是 **Opus 4.8**：
+上游这次把模型和 effort level 的关系又更新了一轮，核心变化是 **Claude Opus 5**：
 
-- Opus 4.8：`low` / `medium` / `high` / `xhigh` / `max`，默认是 `high`
-- Opus 4.7：`low` / `medium` / `high` / `xhigh` / `max`，旧口径里默认是 `xhigh`
+- Opus 5（`claude-opus-5`、1M context）：`low` / `medium` / `high` / `xhigh` / `max`，默认 `high`
+- Sonnet 5、Opus 4.8：`low` / `medium` / `high` / `xhigh` / `max`，默认 `high`
+- Opus 4.7：`low` / `medium` / `high` / `xhigh` / `max`，默认 `xhigh`
 - Opus 4.6、Sonnet 4.6：`low` / `medium` / `high` / `max`
 - Haiku 4.5：不支持 effort levels
 
@@ -859,9 +950,21 @@ sandboxing 的核心不是“更麻烦”，而是“更安全地控制 Claude �
 
 对中文用户来说，一个最简单的记法是：
 
-- **Opus 4.8 默认先按 `high` 理解**
+- **Opus 5 是当前默认 Opus 模型，默认 effort 为 `high`**
 - 需要更重推理时再显式选 `xhigh` 或 `max`
 - 不要把 Haiku 4.5 写成支持 effort levels
+
+### Opus 5 的 safety-classifier fallback
+
+这和主模型过载时使用的 `fallbackModel` 不是同一机制。`v2.1.219+` 中，Opus 5 请求被 cybersecurity classifier 标记时会改用 Opus 4.8 重跑；被 biology classifier 标记时直接拒绝，不会切换 fallback。做渗透测试、CTF、安全审查或生物相关代码时，需要把这种模型变化或拒绝算进验证预期。
+
+`switchModelsOnFlag`（默认 `true`）控制被标记时是否自动切换。设为 `false` 后，Claude Code 会暂停并让你选择切换模型或修改 prompt；`/config` 中显示为 **Switch models when a message is flagged**。
+
+```json
+{
+  "switchModelsOnFlag": false
+}
+```
 
 ---
 

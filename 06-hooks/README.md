@@ -45,6 +45,8 @@ hooks 最大的价值，是把“你本来每次都要手动做的检查”变�
 
 如果你是新手，建议先从用户级或项目级配置开始。
 
+从 `v2.1.218+` 起，project agent frontmatter 里的 hooks 只有在 agent 文件所在目录通过 workspace trust 后才运行。这个限制不会因为 hook 写在 frontmatter 里就自动绕过。
+
 ---
 
 ## 基本结构
@@ -94,6 +96,8 @@ hooks 最大的价值，是把“你本来每次都要手动做的检查”变�
 - `Read(.env)`：匹配当前目录及子目录里的 `.env`
 - `Read(~/.ssh/**)`：匹配用户 SSH 目录读取
 - `Bash(git push *)`：只匹配 `git push` 相关命令
+
+> **`v2.1.214+` 范围变化**：在 hook `if` 条件里，单段 `dir/**`（例如 `Edit(src/**)`）现在只匹配 `<cwd>/dir`，不会再匹配任意深度的 `foo/dir/**`。如果确实要匹配任意深度，请写 `**/dir/**`。这个收窄只影响 hook `if` 和 allow-rule 自动批准；deny / ask permission rules 里的 `dir/**` 仍按任意深度理解。
 
 注意位置：`if` 是 `hooks` 数组里某个 handler 的字段，和 `type`、`command` 同级，不是写在 `matcher` 上。
 
@@ -257,6 +261,7 @@ hooks 最大的价值，是把“你本来每次都要手动做的检查”变�
 - `PostToolBatch`
 - `Notification`
 - `MessageDisplay`
+- `DirectoryAdded`
 - `TaskCreated`
 - `TaskCompleted`
 - `CwdChanged`
@@ -270,7 +275,7 @@ hooks 最大的价值，是把“你本来每次都要手动做的检查”变�
 
 如果你是新手，不需要一上来把所有事件都学完。
 
-> 截至 `v2.1.152+`，上游已经明确写成 **30 个 hook 事件、5 种 hook 类型**。如果你还在参考旧资料里“25 个事件 / 4 种类型”“28 个事件”或“29 个事件”的说法，优先以现在这版为准。新增的 `MessageDisplay` 会在 assistant message text 显示过程中触发，适合转换或隐藏展示文本。
+> 截至 `v2.1.219+`，上游共有 **31 个 hook 事件、5 种 hook 类型**。类型（`command`、`http`、`mcp_tool`、`prompt`、`agent`）决定 hook 如何运行，事件决定它何时运行，两者不是同一个分类轴。如果你还在参考旧资料里的 25、28、29 或 30 个事件，优先以当前版本为准。`MessageDisplay` 会在 assistant message text 显示过程中触发；新增的 `DirectoryAdded` 会在 `/add-dir` 或 SDK `register_repo_root` 注册新工作目录后触发。
 
 ---
 
@@ -324,11 +329,14 @@ hooks 通常通过 `stdin` 接收 JSON 输入。
 - `allow`
 - `deny`
 - `ask`
+- `defer`
 - `updatedInput`
 - `additionalContext`
 - `hookSpecificOutput.updatedToolOutput`
 
-如果你只是在做简单 shell 检查，先把“成功返回 0，失败返回非 0”跑通就够了。
+shell hook 的退出码不是普通脚本里的“任意非零都算阻断”：`0` 表示成功；**只有 `exit 2` 才会按事件语义阻断**，并且阻断原因必须写到 `stderr`。其他非零退出码只是非阻断错误，例如 `PreToolUse` 中用 `exit 1` 不会阻止工具调用。`PostToolUse` 已发生在工具执行之后，`exit 2` 只能把 stderr 反馈给 Claude，不能撤销已经完成的操作。
+
+`PreToolUse` 的 `permissionDecision` 可返回 `allow`、`deny`、`ask` 或 `defer`。`defer` 用于把工具调用留待稍后恢复，并会忽略 `permissionDecisionReason`、`updatedInput` 和 `additionalContext`。多个 hook 意见冲突时，优先级是 `deny` > `defer` > `ask` > `allow`；permission rules 中的 deny / ask 仍会继续参与判断。
 
 ### hooks 现在也能感知当前 effort level
 
@@ -391,6 +399,8 @@ hooks 通常通过 `stdin` 接收 JSON 输入。
 
 这些 key 是协议字段，不要翻译。
 
+`SessionStart` 的 matcher / source 还包括 `startup`、`resume`、`clear`、`compact` 和 `fork`。从 `v2.1.214+` 起，fork 出来的 session 会报告 `"fork"`，不再伪装成 `"resume"`。
+
 另外，status-line command scripts 现在会收到 `COLUMNS` 和 `LINES` 环境变量。你可以根据终端宽度输出短状态栏或详细状态栏，例如窄窗口只显示分支和测试状态，宽窗口再补充 token / session 信息。
 
 ### 这轮上游同步后要特别注意什么
@@ -401,7 +411,7 @@ hooks 通常通过 `stdin` 接收 JSON 输入。
 
 - 从 `stdin` 读 JSON 输入
 - 用 `file_path`、`command`、`user_prompt` 这类字段取值
-- 需要阻止或修改行为时，返回 Claude Code 认可的 stdout JSON
+- 需要阻止或修改行为时，返回 Claude Code 认可的 stdout JSON；简单阻断则向 stderr 输出理由并 `exit 2`
 
 如果你还在按“第一个位置参数就是文件路径”来写，很容易和新版本示例脱节。
 
@@ -573,6 +583,7 @@ open local-progress/index.html
 - `reloadSkills`
 - `sessionTitle`
 - `MessageDisplay`
+- `DirectoryAdded`
 - `COLUMNS`
 - `LINES`
 - 事件名，例如 `PreToolUse`
@@ -597,7 +608,7 @@ open local-progress/index.html
 
 ### 1. shell 差异
 
-很多示例默认更偏 Unix / macOS / Linux 风格。  
+很多示例默认更偏 Unix / macOS / Linux 风格。
 Windows 用户请先确认你当前用的是：
 
 - PowerShell

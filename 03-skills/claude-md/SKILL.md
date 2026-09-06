@@ -25,6 +25,8 @@ $ARGUMENTS
 - 不要把 lint / format 规则硬塞进去
 - 不要把一次性任务说明塞进去
 - 不要自动生成一堆无价值内容
+- `AGENTS.md` 不会被 Claude Code 自动读取；需要共享时从 `CLAUDE.md` 导入 `@AGENTS.md` 或使用 symlink
+- subagent 定义属于 `.claude/agents/`，不要把 `AGENTS.md` 当成 agent 配置
 
 ## 推荐结构
 
@@ -59,7 +61,7 @@ $ARGUMENTS
 
 ## 质量约束
 
-- 目标尽量少于 300 行
+- 目标控制在 200 行以内；更长内容拆到按路径生效的 rules 或按需 skills
 - 面向所有会话都适用
-- 尽量用文件引用替代长代码块
+- 文件引用可以减少重复维护，但不会减少加载上下文；需要按需加载时使用 rules 或 skills
 - 命令必须真实可用

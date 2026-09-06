@@ -221,6 +221,18 @@ def validate_shell_scripts(root: Path) -> list[str]:
         if result.returncode != 0:
             details = result.stderr.strip() or "bash -n failed"
             errors.append(f"{path}: invalid shell syntax - {details}")
+
+    session_end = root / "06-hooks/session-end.sh"
+    if session_end.is_file():
+        executable_lines = [
+            line.strip()
+            for line in read_text(session_end).splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        if not executable_lines or executable_lines[-1] != "exit 0":
+            errors.append(
+                f"{session_end}: SessionEnd success exit must be the final command"
+            )
     return errors
 
 
@@ -395,6 +407,598 @@ V2_1_206_REQUIRED_SNIPPETS = {
         "--append-subagent-system-prompt",
         "CLAUDE_ENABLE_STREAM_WATCHDOG",
         "claude-sonnet-5",
+    ],
+}
+
+V2_1_212_REQUIRED_SNIPPETS = {
+    Path("claude_concepts_guide.md"): [
+        "v2.1.212",
+        "4 hops",
+        "CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS",
+    ],
+    Path("resources.md"): [
+        "claude auto-mode reset",
+        "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION",
+        "--ax-screen-reader",
+    ],
+    Path("CATALOG.md"): [
+        "2 套机制",
+        "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION",
+        "--ax-screen-reader",
+    ],
+    Path("QUICK_REFERENCE.md"): [
+        "claude auto-mode reset",
+        "CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION",
+        "CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS",
+    ],
+    Path("01-slash-commands/README.md"): [
+        "/fork [prompt]",
+        "/subtask <task>",
+        "/branch [name]",
+        "v2.1.212",
+    ],
+    Path("02-memory/README.md"): [
+        "4 hops",
+        "拼接",
+        "managed-settings.d/",
+        "命令行参数",
+    ],
+    Path("04-subagents/README.md"): [
+        "v2.1.210",
+        "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION",
+        "xhigh",
+        "Task tool",
+        "`mode`",
+    ],
+    Path("05-mcp/README.md"): ["CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS"],
+    Path("09-advanced-features/README.md"): [
+        "claude auto-mode reset",
+        "--ax-screen-reader",
+        "CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION",
+        "disableAutoMode",
+    ],
+    Path("10-cli/README.md"): [
+        "CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION",
+        "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION",
+        "CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS",
+        "CLAUDE_AX_SCREEN_READER",
+    ],
+}
+
+V2_1_212_FORBIDDEN_SNIPPETS = {
+    Path("02-memory/README.md"): ["当前教程按 8 层理解"],
+    Path("09-advanced-features/README.md"): [
+        "需要显式设置 `CLAUDE_CODE_ENABLE_AUTO_MODE=1`",
+        "较新的主名称",
+    ],
+    Path("10-cli/README.md"): [
+        "需要显式设置 `CLAUDE_CODE_ENABLE_AUTO_MODE=1`",
+        "较新的主名称",
+    ],
+    Path("QUICK_REFERENCE.md"): ["某些版本中 `/fork` 仍可作为兼容别名"],
+    Path("resources.md"): [
+        "在 Bedrock / Vertex / Foundry 上对 Opus 4.7 / 4.8 显式启用"
+    ],
+    Path("CATALOG.md"): ["从当前对话分叉\uff08某些版本中 `/fork` 仍可能可用\uff09"],
+}
+
+V2_1_217_REQUIRED_SNIPPETS = {
+    Path("UPSTREAM.md"): [
+        "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+        "config-examples.json",
+    ],
+    Path("CHANGELOG.md"): ["v2.1.217", "8f04517", "97fc961"],
+    Path("claude_concepts_guide.md"): [
+        "v2.1.217",
+        "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+        "sandbox.filesystem.disabled",
+        "--permission-mode auto",
+    ],
+    Path("resources.md"): [
+        "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+        "sandbox.filesystem.disabled",
+    ],
+    Path("CATALOG.md"): [
+        "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH",
+        "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+        "--permission-mode auto",
+    ],
+    Path("QUICK_REFERENCE.md"): [
+        "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+        "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH",
+        "--permission-mode auto",
+    ],
+    Path("01-slash-commands/README.md"): [
+        "v2.1.216+` 起压缩失败",
+        "context window 上限",
+        "--permission-mode auto",
+    ],
+    Path("02-memory/README.md"): [
+        "GUI editor",
+        "`modified` 字段",
+        "200 行以内",
+    ],
+    Path("03-skills/README.md"): [
+        "v2.1.215+` 起只会在用户显式调用时运行",
+    ],
+    Path("03-skills/brand-voice/SKILL.md"): [
+        "name: brand-voice",
+        "user-invocable: false",
+    ],
+    Path("03-skills/claude-md/SKILL.md"): ["200 行以内"],
+    Path("04-subagents/README.md"): [
+        "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+        "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH",
+    ],
+    Path("06-hooks/README.md"): [
+        "**/dir/**",
+        '报告 `"fork"`',
+        "deny / ask permission rules",
+    ],
+    Path("08-checkpoints/README.md"): ["symlink", "hard link", "跳过数量"],
+    Path("09-advanced-features/README.md"): [
+        "sandbox.filesystem.disabled",
+        "emojiCompletionEnabled",
+        "CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH",
+    ],
+    Path("09-advanced-features/config-examples.json"): [
+        '"defaultMode"',
+        '"fileCheckpointingEnabled"',
+        '"PostToolUse"',
+        '"claude-sonnet-5"',
+    ],
+    Path("10-cli/README.md"): [
+        "--permission-mode auto",
+        "--settings` 读取的文件",
+        "10,000 字符",
+        "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+        "CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH",
+    ],
+}
+
+V2_1_217_FORBIDDEN_SNIPPETS = {
+    Path("01-slash-commands/README.md"): [
+        "不再强依赖 `--enable-auto-mode`",
+    ],
+    Path("03-skills/brand-voice/SKILL.md"): [
+        "name: brand-voice-consistency",
+    ],
+    Path("03-skills/claude-md/SKILL.md"): ["目标尽量少于 300 行"],
+    Path("04-subagents/README.md"): [
+        "它可以继续 spawn 自己的子 subagent\uff0c最多嵌套 5 层",
+    ],
+    Path("CATALOG.md"): [
+        "subagent 可以再 spawn 子 subagent\uff0c最多嵌套 5 层",
+        "subagent 最多 5 层嵌套",
+    ],
+    Path("resources.md"): ["最多支持 5 层嵌套"],
+    Path("claude_concepts_guide.md"): [
+        "subagent 可以再 spawn 子 subagent\uff0c最多嵌套 5 层",
+    ],
+    Path("09-advanced-features/config-examples.json"): [
+        '"planning"',
+        '"extendedThinking"',
+        '"headless"',
+        '"autoCheckpoint"',
+        '"mode": "unrestricted"',
+        '"claude-opus-4-7"',
+        '"PreToolUse:Write"',
+    ],
+}
+
+V2_1_220_REQUIRED_SNIPPETS = {
+    Path("README.md"): ["v2.1.220-r2", "b9a973b"],
+    Path("UPSTREAM.md"): [
+        "b9a973bf32bc28bdccb106012397e10235779bc3",
+        "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1",
+        "DirectoryAdded",
+        "workflowSizeGuideline",
+    ],
+    Path("CHANGELOG.md"): ["v2.1.220", "97fc961", "343d6f0"],
+    Path("INDEX.md"): ["v2.1.220", "默认深度为 3", "claude-opus-5"],
+    Path("01-slash-commands/README.md"): [
+        "/deep-research <topic>",
+        "claude-opus-5",
+        "Opus 5 和 Opus 4.8",
+    ],
+    Path("03-skills/README.md"): [
+        "background: true",
+        "background: false",
+        "yes` / `no`",
+        "/deep-research <topic>",
+    ],
+    Path("04-subagents/README.md"): [
+        "默认深度为 3",
+        "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1",
+        "workspace trust",
+        "不能包含 `:`",
+    ],
+    Path("05-mcp/README.md"): [
+        "claude mcp list",
+        "HTTP 状态与错误文本",
+        "首尾空白字符",
+        "mcp_server_errors",
+    ],
+    Path("06-hooks/README.md"): [
+        "31 个 hook 事件、5 种 hook 类型",
+        "DirectoryAdded",
+        "register_repo_root",
+        "workspace trust",
+    ],
+    Path("09-advanced-features/README.md"): [
+        "permissions.disableAutoMode",
+        "useAutoModeDuringPlan",
+        "workflowSizeGuideline",
+        "sandbox.network.strictAllowlist",
+        "safety-classifier fallback",
+    ],
+    Path("10-cli/README.md"): [
+        "claude-opus-5",
+        "--forward-subagent-text",
+        "workflowSizeGuideline",
+        "默认 `3`\uff0c设为 `1`",
+    ],
+    Path("CATALOG.md"): [
+        "31 个事件",
+        "claude-opus-5",
+        "mcp_server_errors",
+        "workflowSizeGuideline",
+    ],
+    Path("QUICK_REFERENCE.md"): [
+        "/deep-research topic",
+        "默认深度 3",
+        "--forward-subagent-text",
+        "sandbox.network.strictAllowlist",
+    ],
+    Path("claude_concepts_guide.md"): [
+        "v2.1.220",
+        "mcp_server_errors",
+        "31 个 hook 事件",
+        "claude-opus-5",
+    ],
+    Path("resources.md"): [
+        "claude-opus-5",
+        "DirectoryAdded",
+        "mcp_server_errors",
+        "sandbox.network.strictAllowlist",
+    ],
+}
+
+V2_1_220_FORBIDDEN_SNIPPETS = {
+    Path("04-subagents/README.md"): [
+        "subagent 嵌套现在默认关闭",
+        "默认不设置\uff0c也就是不允许嵌套",
+    ],
+    Path("CATALOG.md"): [
+        "从 `v2.1.217` 起嵌套默认关闭",
+        "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 显式开启嵌套",
+        "Opus 4.8 默认 effort 是 `high`",
+    ],
+    Path("QUICK_REFERENCE.md"): ["显式开启 subagent 嵌套"],
+    Path("resources.md"): [
+        "`v2.1.217+` 默认关闭嵌套",
+        "Vexilo",
+    ],
+    Path("claude_concepts_guide.md"): [
+        "从 `v2.1.217` 起嵌套默认关闭",
+    ],
+    Path("06-hooks/README.md"): [
+        "**30 个 hook 事件、5 种 hook 类型**",
+    ],
+    Path("09-advanced-features/README.md"): [
+        "截至 `v2.1.217`\uff0cAuto Mode",
+        "`v2.1.217+` 默认不允许嵌套",
+        "核心变化是 **Opus 4.8**",
+    ],
+    Path("10-cli/README.md"): [
+        "API 仍默认使用 Opus 4.8",
+        "Opus 主线已经切到 **Opus 4.8**",
+        "默认不允许嵌套",
+        "让 Opus 4.6 走 fast mode",
+    ],
+}
+
+V2_1_220_R2_REQUIRED_SNIPPETS = {
+    Path("README.md"): ["v2.1.220-r2"],
+    Path("UPSTREAM.md"): [
+        "b9a973bf32bc28bdccb106012397e10235779bc3",
+        "v2.1.220-r2",
+    ],
+    Path("CHANGELOG.md"): ["2026-08-05", "v2.1.220-r2", "b9a973b"],
+    Path("INDEX.md"): ["v2.1.220-r2", "/fork", "/subtask"],
+    Path("01-slash-commands/README.md"): [
+        "/fewer-permission-prompts",
+        "/fork [prompt]",
+        "/subtask <task>",
+        "/output-style",
+        "outputStyle",
+    ],
+    Path("01-slash-commands/doc-refactor.md"): ["name: doc-refactor"],
+    Path("01-slash-commands/setup-ci-cd.md"): ["name: setup-ci-cd"],
+    Path("01-slash-commands/unit-test-expand.md"): ["name: unit-test-expand"],
+    Path("02-memory/README.md"): [
+        "autoMemoryEnabled",
+        "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+        "200 行以内",
+        "AGENTS.md",
+    ],
+    Path("02-memory/directory-api-CLAUDE.md"): ["用于补充根目录"],
+    Path("03-skills/README.md"): ["Enterprise > Project > Personal"],
+    Path("03-skills/claude-md/SKILL.md"): ["AGENTS.md", "200 行以内"],
+    Path("03-skills/refactor/SKILL.md"): ["name: refactor"],
+    Path("04-subagents/README.md"): ["`color`", "`cyan`"],
+    Path("05-mcp/README.md"): [
+        "--scope local",
+        "--scope project",
+        "--scope user",
+        "claude mcp add-json",
+        "streamable-http",
+    ],
+    Path("05-mcp/database-mcp.json"): [
+        '"type": "stdio"',
+        '"DATABASE_URL": "${DATABASE_URL}"',
+    ],
+    Path("05-mcp/filesystem-mcp.json"): ['"type": "stdio"'],
+    Path("05-mcp/github-mcp.json"): ['"type": "stdio"'],
+    Path("05-mcp/multi-mcp.json"): ['"type": "stdio"'],
+    Path("06-hooks/README.md"): [
+        "`exit 2`",
+        "`stderr`",
+        "`defer`",
+        "deny` > `defer` > `ask` > `allow",
+    ],
+    Path("06-hooks/dependency-check.sh"): [
+        "INPUT=$(cat)",
+        '"file_path"',
+    ],
+    Path("06-hooks/pre-commit.sh"): [
+        ".tool_input.command",
+        "git's actual subcommand is commit",
+        "exit 2",
+        ">&2",
+    ],
+    Path("06-hooks/session-end.sh"): ["exit 0"],
+    Path("06-hooks/context-tracker.py"): ["CONTEXT_LIMIT = 1000000"],
+    Path("06-hooks/context-tracker-tiktoken.py"): ["CONTEXT_LIMIT = 1000000"],
+    Path("07-plugins/README.md"): [
+        "anthropics/claude-plugins-community",
+        "<plugin-name>@claude-community",
+    ],
+    Path("07-plugins/devops-automation/agents/alert-analyzer.md"): [
+        "tools: Read, Grep, Bash"
+    ],
+    Path("07-plugins/devops-automation/agents/deployment-specialist.md"): [
+        "tools: Read, Write, Bash, Grep"
+    ],
+    Path("07-plugins/devops-automation/agents/incident-commander.md"): [
+        "tools: Read, Write, Bash, Grep"
+    ],
+    Path("07-plugins/documentation/agents/api-documenter.md"): [
+        "tools: Read, Write, Grep"
+    ],
+    Path("07-plugins/documentation/agents/code-commentator.md"): [
+        "tools: Read, Write, Edit"
+    ],
+    Path("07-plugins/documentation/agents/example-generator.md"): [
+        "tools: Read, Write"
+    ],
+    Path("07-plugins/pr-review/agents/performance-analyzer.md"): [
+        "tools: Read, Grep, Bash"
+    ],
+    Path("07-plugins/pr-review/agents/security-reviewer.md"): [
+        "tools: Read, Grep, Bash"
+    ],
+    Path("07-plugins/pr-review/agents/test-checker.md"): ["tools: Read, Bash, Grep"],
+    Path("08-checkpoints/README.md"): [
+        "fileCheckpointingEnabled",
+        "CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING",
+        "100 个 checkpoints",
+    ],
+    Path("09-advanced-features/README.md"): [
+        "permissions.defaultMode",
+        "switchModelsOnFlag",
+        "Output Styles",
+        "Status Line",
+        "outputStyle",
+        "statusLine",
+        "/subtask <task>",
+    ],
+    Path("09-advanced-features/config-examples.json"): [
+        '"defaultMode": "manual"',
+        '"model": "claude-opus-5"',
+    ],
+    Path("CATALOG.md"): [
+        "/fewer-permission-prompts",
+        "/subtask <task>",
+        "11 | 适合自动化",
+    ],
+    Path("QUICK_REFERENCE.md"): [
+        "/subtask 检查 flaky tests",
+        "fileCheckpointingEnabled",
+        "claude mcp add-json",
+    ],
+    Path("claude_concepts_guide.md"): [
+        "/subtask <task>",
+        "autoMemoryEnabled",
+        "fileCheckpointingEnabled",
+    ],
+    Path("resources.md"): [
+        "/fewer-permission-prompts",
+        "anthropics/claude-plugins-community",
+        "switchModelsOnFlag",
+    ],
+    Path("10-cli/README.md"): ["/fork [prompt]", "/subtask <task>"],
+    Path("scripts/build_website.py"): [
+        'REPO_URL = "https://github.com/lhfer/claude-howto-zh-cn"',
+    ],
+    Path("scripts/pyproject.toml"): [
+        'include = ["**/*.py"]',
+        '"PLR0917"',
+    ],
+    Path(".github/markdown-link-check-config.json"): [
+        "https://github.com/lhfer/claude-howto-zh-cn/blob/main/",
+        '"timeout": "10s"',
+    ],
+    Path(".github/ISSUE_TEMPLATE/config.yml"): [
+        "Claude Code 官方文档",
+        "查看 Anthropic 官方示例与实践",
+    ],
+}
+
+V2_1_220_R2_FORBIDDEN_SNIPPETS = {
+    Path("01-slash-commands/README.md"): [
+        "/less-permission-prompts",
+        "/fork <directive>",
+    ],
+    Path("01-slash-commands/doc-refactor.md"): [
+        "name: Documentation Refactor",
+        "tags:",
+    ],
+    Path("01-slash-commands/setup-ci-cd.md"): [
+        "name: Setup CI/CD Pipeline",
+        "tags:",
+    ],
+    Path("01-slash-commands/unit-test-expand.md"): [
+        "name: Expand Unit Tests",
+        "tags:",
+    ],
+    Path("02-memory/README.md"): ["控制在几百行内", "目录下的内容会覆盖"],
+    Path("02-memory/directory-api-CLAUDE.md"): ["用于覆盖根目录"],
+    Path("03-skills/README.md"): ["Enterprise > Personal > Project"],
+    Path("03-skills/refactor/SKILL.md"): ["name: code-refactor"],
+    Path("05-mcp/database-mcp.json"): [
+        "postgresql://user:pass@localhost/mydb",
+    ],
+    Path("06-hooks/README.md"): ["成功返回 0\uff0c失败返回非 0"],
+    Path("06-hooks/dependency-check.sh"): ["FILE=$1", "PostToolUse:Write"],
+    Path("06-hooks/pre-commit.sh"): ["exit 1"],
+    Path("06-hooks/context-tracker.py"): ["CONTEXT_LIMIT = 128000"],
+    Path("06-hooks/context-tracker-tiktoken.py"): ["CONTEXT_LIMIT = 128000"],
+    Path("09-advanced-features/README.md"): [
+        "/fork <directive>",
+        '"permissions": {"mode"',
+    ],
+    Path("09-advanced-features/config-examples.json"): [
+        '"defaultMode": "default"',
+        '"model": "claude-opus-4-8"',
+    ],
+    Path("CATALOG.md"): ["/less-permission-prompts", "/fork <directive>"],
+    Path("QUICK_REFERENCE.md"): [
+        "/fork 检查 flaky tests",
+        "委派给继承完整对话的后台 subagent",
+    ],
+    Path("claude_concepts_guide.md"): ["/fork <directive>"],
+    Path("resources.md"): ["/fork <directive>"],
+    Path("10-cli/README.md"): ["/fork <directive>"],
+    Path("scripts/build_website.py"): [
+        'REPO_URL = "https://github.com/luongnv89/claude-howto"',
+    ],
+    Path("scripts/pyproject.toml"): ['include = ["scripts/**/*.py"]'],
+    Path(".github/ISSUE_TEMPLATE/config.yml"): [
+        "https://github.com/luongnv89/claude-howto/discussions",
+    ],
+}
+
+V2_1_220_FOLLOWUP_REQUIRED_SNIPPETS = {
+    Path("README.md"): ["2026-08-06", "b9a973b", "4f3fa85"],
+    Path("UPSTREAM.md"): [
+        "4f3fa85d7ed0f0f77f0d8bba3f0b40ff10b2063b",
+        "Reviewed upstream range: `b9a973b` → `4f3fa85`",
+        "--lang zh",
+    ],
+    Path("CHANGELOG.md"): ["2026-08-06", "b9a973b", "4f3fa85"],
+    Path("INDEX.md"): ["4f3fa85", "本地 `mmdc`", "31 个 hook 事件"],
+    Path("CLAUDE.md"): ["--lang zh", "EPUB 构建 jobs", "arm64"],
+    Path("06-hooks/README.md"): [
+        "`command`、`http`、`mcp_tool`、`prompt`、`agent`",
+        "两者不是同一个分类轴",
+    ],
+    Path("scripts/build_epub.py"): [
+        'mmdc_path: str = "mmdc"',
+        '"--puppeteer-config"',
+        "subprocess.run(",
+        "mmdc produced no output",
+    ],
+    Path("scripts/README.md"): [
+        "--mmdc-path",
+        "--puppeteer-config",
+        "EPUB 构建 jobs",
+        "arm64",
+    ],
+    Path(".github/workflows/test.yml"): [
+        "Install mmdc (Mermaid CLI)",
+        "--lang zh",
+        "if-no-files-found: error",
+        "needs: [pytest, lint, security, type-check]",
+        "codecov/codecov-action@v5",
+    ],
+    Path(".github/workflows/ci.yml"): [
+        "Install mmdc (Mermaid CLI)",
+        "--lang zh",
+        "--puppeteer-config",
+        "if-no-files-found: error",
+        "codecov/codecov-action@v5",
+    ],
+    Path(".github/workflows/release.yml"): [
+        "Install mmdc (Mermaid CLI)",
+        "--lang zh",
+        "--puppeteer-config",
+        "test -s claude-howto-guide.epub",
+    ],
+    Path(".github/workflows/docs-check.yml"): [
+        "actions/setup-python@v7",
+        "node-version: '24'",
+        "markdownlint-cli@0.49.1",
+        "--config .markdownlint.json",
+    ],
+    Path(".pre-commit-config.yaml"): [
+        "rev: v0.15.10",
+        "args: [-c, scripts/pyproject.toml]",
+        "markdownlint-cli@0.49.1",
+        ".markdownlint.json",
+    ],
+    Path(".markdownlint.json"): ['"default": false', '"MD009": true'],
+    Path("scripts/pyproject.toml"): [
+        'include = ["**/*.py"]',
+        '"tests/*.py"',
+        '"PLR0917"',
+        "[tool.mypy]",
+        "ignore_missing_imports = true",
+    ],
+    Path("scripts/requirements-dev.txt"): ["ruff>=0.15.10", "mypy>=1.8.0"],
+    Path(".cspell.json"): ['"httpx"'],
+}
+
+V2_1_220_FOLLOWUP_FORBIDDEN_SNIPPETS = {
+    Path("scripts/build_epub.py"): [
+        "Kroki.io",
+        "import httpx",
+        "from tenacity",
+        '"--timeout"',
+        '"--max-concurrent"',
+    ],
+    Path("scripts/README.md"): ["Kroki.io", "--timeout", "--max-concurrent"],
+    Path("scripts/requirements.txt"): ["httpx", "tenacity"],
+    Path("scripts/pyproject.toml"): [
+        '"httpx"',
+        '"tenacity"',
+        '"scripts/tests/*.py"',
+        '"B113"',
+    ],
+    Path(".cspell.json"): ['"tenacity"'],
+    Path(".pre-commit-config.yaml"): [
+        "rev: v0.8.2",
+        "args: [-c, pyproject.toml]",
+    ],
+    Path(".github/workflows/test.yml"): [
+        "continue-on-error: true",
+        "codecov/codecov-action@v3",
+    ],
+    Path(".github/workflows/ci.yml"): ["codecov/codecov-action@v3"],
+    Path(".github/workflows/docs-check.yml"): [
+        "actions/setup-python@v4",
+        "continue-on-error: true",
+        "node-version: '18'",
     ],
 }
 
@@ -614,16 +1218,81 @@ def validate_curriculum_consistency(root: Path) -> list[str]:  # noqa: PLR0912
             f"{topic_recommendations_path}: skill description budget must be 1%"
         )
 
-    for relative_path, snippets in V2_1_206_REQUIRED_SNIPPETS.items():
+    for version, required_snippets in (
+        ("v2.1.206", V2_1_206_REQUIRED_SNIPPETS),
+        ("v2.1.212", V2_1_212_REQUIRED_SNIPPETS),
+        ("v2.1.217", V2_1_217_REQUIRED_SNIPPETS),
+        ("v2.1.220", V2_1_220_REQUIRED_SNIPPETS),
+        ("v2.1.220-r2", V2_1_220_R2_REQUIRED_SNIPPETS),
+        ("v2.1.220-followup", V2_1_220_FOLLOWUP_REQUIRED_SNIPPETS),
+    ):
+        for relative_path, snippets in required_snippets.items():
+            path = root / relative_path
+            if not path.is_file():
+                errors.append(
+                    f"{relative_path}: required {version} document is missing"
+                )
+                continue
+            content = read_text(path)
+            errors.extend(
+                f"{relative_path}: missing {version} content '{snippet}'"
+                for snippet in snippets
+                if snippet not in content
+            )
+
+    for relative_path, snippets in V2_1_212_FORBIDDEN_SNIPPETS.items():
         path = root / relative_path
         if not path.is_file():
-            errors.append(f"{relative_path}: required v2.1.206 document is missing")
             continue
         content = read_text(path)
         errors.extend(
-            f"{relative_path}: missing v2.1.206 content '{snippet}'"
+            f"{relative_path}: stale v2.1.212 content '{snippet}'"
             for snippet in snippets
-            if snippet not in content
+            if snippet in content
+        )
+
+    for relative_path, snippets in V2_1_217_FORBIDDEN_SNIPPETS.items():
+        path = root / relative_path
+        if not path.is_file():
+            continue
+        content = read_text(path)
+        errors.extend(
+            f"{relative_path}: stale v2.1.217 content '{snippet}'"
+            for snippet in snippets
+            if snippet in content
+        )
+
+    for relative_path, snippets in V2_1_220_FORBIDDEN_SNIPPETS.items():
+        path = root / relative_path
+        if not path.is_file():
+            continue
+        content = read_text(path)
+        errors.extend(
+            f"{relative_path}: stale v2.1.220 content '{snippet}'"
+            for snippet in snippets
+            if snippet in content
+        )
+
+    for relative_path, snippets in V2_1_220_R2_FORBIDDEN_SNIPPETS.items():
+        path = root / relative_path
+        if not path.is_file():
+            continue
+        content = read_text(path)
+        errors.extend(
+            f"{relative_path}: stale v2.1.220-r2 content '{snippet}'"
+            for snippet in snippets
+            if snippet in content
+        )
+
+    for relative_path, snippets in V2_1_220_FOLLOWUP_FORBIDDEN_SNIPPETS.items():
+        path = root / relative_path
+        if not path.is_file():
+            continue
+        content = read_text(path)
+        errors.extend(
+            f"{relative_path}: stale v2.1.220 follow-up content '{snippet}'"
+            for snippet in snippets
+            if snippet in content
         )
 
     return errors

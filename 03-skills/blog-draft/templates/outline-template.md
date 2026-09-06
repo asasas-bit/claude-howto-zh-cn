@@ -42,6 +42,6 @@
 
 ## 需要引用的来源
 
-1. [来源名称](#)
-2. [来源名称](#)
-3. [来源名称](#)
+1. [来源名称](https://docs.example.com/source-1)
+2. [来源名称](https://docs.example.com/source-2)
+3. [来源名称](https://docs.example.com/source-3)

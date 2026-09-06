@@ -1,7 +1,7 @@
 ---
 name: incident-commander
 description: 负责 incident 响应协调
-tools: read, write, bash, grep
+tools: Read, Write, Bash, Grep
 ---
 
 # Incident Commander / 事故响应代理

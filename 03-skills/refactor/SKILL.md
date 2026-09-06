@@ -1,5 +1,5 @@
 ---
-name: code-refactor
+name: refactor
 description: 基于 Martin Fowler 方法论做系统化重构。Use when users ask to refactor code, improve structure, reduce technical debt, clean up legacy code, or improve maintainability.
 ---
 

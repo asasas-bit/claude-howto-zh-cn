@@ -20,16 +20,19 @@
 
 ## 最近同步
 
-- **最近同步日期**：2026-07-12
-- **本轮参考范围**：`0f3fe1d` -> `a645ffe`
+- **最近同步日期**：2026-08-06
+- **本轮参考范围**：`b9a973b` -> `4f3fa85`
 - **本次同步内容**：
-  - 同步 Claude Code `v2.1.206`：Sonnet 5、`manual` permission mode、`/dataviz`、skill 叠加、subagent 默认后台运行、MCP `roots/list`、双向 checkpoint summarize 等
-  - 补齐 hooks、plugins、advanced settings 和 CLI 新字段，同时保留所有可执行标识原文
-  - 复查并修正上一轮课程评估内容：Lesson Quiz 统一为 5 轮，Deep Assessment 满分统一为 19，Hooks 题目更新为 30 个事件
-  - 将题目、结果模板和学习建议改成中文主线，并让 Q9 / Q10 的回看指针匹配真实中文章节
-  - 修复 EPUB 构建时把已嵌入 Mermaid 资源误报为本地缺图的问题，并增加回归测试
-  - 保留 `SKILL.md` frontmatter key、CLI flags、路径、slash command 和 skill / plugin / subagent 名称原文
-  - 继续保持根目录中文主线，不把上游英文 README 覆盖到中文首页
+  - 跟进上游 `v2.1.220-r2` accuracy review 的后续修复，审阅 EPUB CI、Ruff、依赖清理、Hook 分类与多语言相对链接变化
+  - 将中文 EPUB 的 Mermaid 渲染从 Kroki/httpx 切换为本地 `mmdc`，保留中文封面、元数据、章节标题和根目录内容结构
+  - EPUB 构建移出 pre-commit，所有 GitHub Actions 构建路径统一安装 `mmdc` 并使用 `--lang zh` 强制构建；任一图表失败都会阻止通过
+  - 删除不再使用的 `httpx`、`tenacity`，统一 Ruff `v0.15.10+`，修正 Bandit 配置路径和 tests 的 Ruff 相对路径
+  - 取消 Ruff、Bandit、mypy 与 Markdown lint 的静默放行，并补充适合中文长行和 HTML 图片头的规则配置，避免“workflow 绿色但检查其实失败”
+  - 升级失去当前 runner 支持的 `codecov-action@v3` 与 `setup-python@v4`，并通过 actionlint 校验全部 workflow
+  - 明确 5 种 hook 类型决定“如何运行”，31 个 hook 事件决定“何时运行”，两者不是同一分类轴
+  - 上游其他语言目录继续只作参考，不重新引入中文 fork 已移除的 `ja/vi/uk/zh` 树
+  - 保留文件名、路径、frontmatter key、JSON/YAML key、CLI flags、环境变量、slash command、skill / subagent / plugin 名称原文
+  - 继续保持 `Claude Code 中文全面上手指南` 为根目录中文主线
 
 ---
 
@@ -233,28 +236,28 @@ cp -r 03-skills/code-review-specialist ~/.claude/skills/
 
 ## 常见问题
 
-**这是官方项目吗？**  
+**这是官方项目吗？**
 不是。这是基于上游社区项目做的中文本土化 fork，来源与同步策略见 [UPSTREAM.md](UPSTREAM.md)。
 
-**我能直接复制里面的命令和配置吗？**  
+**我能直接复制里面的命令和配置吗？**
 大多数可以，但前提是你不要改坏关键标识。像 frontmatter key、JSON key、CLI flags、环境变量名这些不能为了中文化而改掉。
 
-**为什么有些术语不翻译？**  
+**为什么有些术语不翻译？**
 因为很多术语一旦翻译，会让你在真实使用 Claude Code、搜索官方文档、复制命令时更容易混淆。这个项目遵循“术语保真，解释中文化”的原则。
 
-**中国用户最容易卡在哪？**  
+**中国用户最容易卡在哪？**
 常见是：GitHub 访问、Token 权限、`npm` / `npx` / `uv` / Python 环境、Windows 和 WSL 差异、以及把示例里可执行字段误翻译。
 
-**能离线看吗？**  
+**能离线看吗？**
 可以。运行：
 
 ```bash
-uv run scripts/build_epub.py
+uv run scripts/build_epub.py --lang zh
 ```
 
-会生成 EPUB 电子书。脚本说明见 [scripts/README.md](scripts/README.md)。
+本机需要可用的 `mmdc`；命令会生成中文 EPUB 电子书。安装方式与 arm64 限制见 [scripts/README.md](scripts/README.md)。
 
-**之后怎么跟上游同步？**  
+**之后怎么跟上游同步？**
 请先看 [UPSTREAM.md](UPSTREAM.md)。本仓库默认按“持续同步上游、中文侧增量跟进”的方式维护。
 
 ---

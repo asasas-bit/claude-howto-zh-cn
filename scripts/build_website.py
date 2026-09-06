@@ -43,10 +43,14 @@ import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import markdown
 from bs4 import BeautifulSoup
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+if TYPE_CHECKING:
+    from bs4.element import Tag
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -57,7 +61,7 @@ from vendor_assets import (
     write_vendor_manifest,
 )
 
-REPO_URL = "https://github.com/luongnv89/claude-howto"
+REPO_URL = "https://github.com/lhfer/claude-howto-zh-cn"
 DEFAULT_BRANCH = "main"
 
 EXCLUDE_DIRS = {
@@ -447,6 +451,12 @@ def _rewrite_asset_ref(
     element[attr] = relative_link(page.output_url, target)  # type: ignore[index]
 
 
+def _get_html_attribute(tag: Tag, name: str, default: str = "") -> str:
+    """Return a single-valued HTML attribute without leaking list values."""
+    value = tag.get(name)
+    return value if isinstance(value, str) else default
+
+
 def rewrite_links_in_soup(
     soup: BeautifulSoup,
     page: PageInfo,
@@ -458,12 +468,14 @@ def rewrite_links_in_soup(
         _rewrite_anchor(a, page, state, config, logger)
 
     for img in soup.find_all("img"):
-        _rewrite_asset_ref(img, "src", img.get("src", ""), page, config)
-        if img.get("src"):
+        src = _get_html_attribute(img, "src")
+        _rewrite_asset_ref(img, "src", src, page, config)
+        if src:
             img["loading"] = "lazy"
 
     for source in soup.find_all("source"):
-        _rewrite_asset_ref(source, "srcset", source.get("srcset", ""), page, config)
+        srcset = _get_html_attribute(source, "srcset")
+        _rewrite_asset_ref(source, "srcset", srcset, page, config)
 
 
 def rewrite_links(
@@ -502,8 +514,8 @@ def normalise_heading_ids(html_content: str) -> str:
 def extract_toc_from_soup(soup: BeautifulSoup) -> list[dict[str, str]]:
     toc: list[dict[str, str]] = []
     for h in soup.find_all(["h2", "h3"]):
-        anchor = h.get("id")
-        if not anchor:
+        anchor = _get_html_attribute(h, "id")
+        if not anchor or not h.name:
             continue
         toc.append({"level": h.name, "text": h.get_text(strip=True), "anchor": anchor})
     return toc

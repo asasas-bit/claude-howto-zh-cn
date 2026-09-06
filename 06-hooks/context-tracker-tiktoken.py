@@ -32,7 +32,7 @@ except ImportError:
     )
 
 # Configuration
-CONTEXT_LIMIT = 128000  # Claude's context window (adjust for your model)
+CONTEXT_LIMIT = 1000000  # 1M for most current models; use 200000 for Haiku 4.5
 
 
 def get_state_file(session_id: str) -> str:

@@ -26,16 +26,19 @@
 ### 功能
 
 - 按目录结构组织章节
-- 把 Mermaid 图通过 Kroki.io 渲染成图片
+- 通过本地 `mmdc` CLI 把 Mermaid 图渲染成图片，不依赖网络服务
+- 对重复 Mermaid 图做缓存，每个唯一图表只渲染一次
 - 生成封面
 - 处理内部 Markdown 链接
-- 在构建失败时明确报错
+- 任一图表无法渲染时让构建失败，避免发布缺图 EPUB
 
 ### 依赖
 
 - Python 3.10+
 - [uv](https://github.com/astral-sh/uv)
-- 可访问 Kroki.io 的网络环境
+- `PATH` 中可用的 [`mmdc`](https://github.com/mermaid-js/mermaid-cli)：`npm install -g @mermaid-js/mermaid-cli`
+
+`mmdc` 依赖的 Chromium 在 arm64 开发机上没有可用构建，因此 EPUB 不再属于 pre-commit 门禁。macOS arm64 用户应让 GitHub Actions 的 EPUB 构建 jobs 完成这项验证。
 
 ### 快速开始
 
@@ -47,7 +50,8 @@ uv run scripts/build_epub.py
 
 ```text
 usage: build_epub.py [-h] [--root ROOT] [--output OUTPUT] [--verbose]
-                     [--timeout TIMEOUT] [--max-concurrent MAX_CONCURRENT]
+                     [--mmdc-path MMDC_PATH] [--lang {zh}]
+                     [--puppeteer-config PUPPETEER_CONFIG]
 ```
 
 ```bash
@@ -57,8 +61,11 @@ uv run scripts/build_epub.py --verbose
 # 自定义输出位置
 uv run scripts/build_epub.py --output ~/Desktop/claude-guide.epub
 
-# 如果遇到速率限制，降低并发
-uv run scripts/build_epub.py --max-concurrent 5
+# 显式指定 mmdc
+uv run scripts/build_epub.py --mmdc-path ./node_modules/.bin/mmdc
+
+# 容器或 CI 中传入 Puppeteer 配置
+uv run scripts/build_epub.py --puppeteer-config /tmp/puppeteer-ci.json
 ```
 
 ---
@@ -112,25 +119,30 @@ pytest scripts/tests/ -v
 # 运行本地化校验
 uv run python scripts/validate_localization.py
 
-# 构建 EPUB
-python scripts/build_epub.py
+# 构建 EPUB（需要本机可用的 mmdc；arm64 请交给 CI）
+uv run scripts/build_epub.py --lang zh
 ```
 
 ---
 
 ## 常见问题
 
-**EPUB 构建失败且提示网络错误**  
-先检查网络、代理以及 Kroki.io 是否可访问，可以尝试提高 `--timeout`。
+**提示 `mmdc not found`**
 
-**本地化校验失败**  
+先运行 `npm install -g @mermaid-js/mermaid-cli`，或通过 `--mmdc-path` 指向现有二进制。arm64 开发机建议直接查看 GitHub Actions 的 EPUB 构建 jobs。
+
+**容器或 CI 中 Chromium sandbox 启动失败**
+
+把 `{"args":["--no-sandbox","--disable-setuid-sandbox"]}` 写入 JSON 文件，再通过 `--puppeteer-config` 传给构建脚本。
+
+**本地化校验失败**
 优先检查：
 
 - 是否把 `/optimize`、`/pr`、`claude -p` 这类命令改坏了
 - 是否把 `allowed-tools`、`tools`、`model`、`env` 这类字段翻译掉了
 - 是否删掉了 `GITHUB_TOKEN`、`mcpServers`、`license` 等受保护标识
 
-**中文内容导致拼写检查报错**  
+**中文内容导致拼写检查报错**
 仓库已对中文字符做了忽略处理；如果仍然报错，多半是英文术语或项目名新增了未收录词条。
 
 ---
@@ -157,7 +169,7 @@ python scripts/build_epub.py
 ### 快速开始
 
 ```bash
-# 生成英文站点到 ./site/
+# 生成根目录中文站点到 ./site/
 uv run scripts/build_website.py
 
 # 本地预览
@@ -173,6 +185,9 @@ usage: build_website.py [-h] [--root ROOT] [--output OUTPUT]
                         [--lang {en,vi,zh,ja,uk}] [--repo-url REPO_URL]
                         [--branch BRANCH] [--verbose]
 ```
+
+默认生成的“查看源码”和非 Markdown 文件链接指向中文仓库
+`lhfer/claude-howto-zh-cn`；维护其他 fork 时可通过 `--repo-url` 覆盖。
 
 ### GitHub Pages 部署
 

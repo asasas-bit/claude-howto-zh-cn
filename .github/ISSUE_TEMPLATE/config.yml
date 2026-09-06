@@ -1,11 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Claude Code Documentation
+  - name: Claude Code 官方文档
     url: https://code.claude.com/docs/en/overview
-    about: Official Claude Code documentation
-  - name: Discussions
-    url: https://github.com/luongnv89/claude-howto/discussions
-    about: Ask questions and share ideas with the community
+    about: 查看 Claude Code 官方功能与配置说明
   - name: Anthropic Cookbook
     url: https://github.com/anthropics/anthropic-cookbook
-    about: Official examples and guides from Anthropic
+    about: 查看 Anthropic 官方示例与实践
